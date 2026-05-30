@@ -1,6 +1,6 @@
 ---
 name: codex-ecc-workspace
-description: Create, inspect, or refresh a NixOS Codex + ECC multi-repository workspace with workspace-local ECC assets. Use when Codex needs to bootstrap a repo like codex-ecc, add flake/direnv/Codex scaffolding, keep projects under repos/, copy ECC .codex and .agents/skills assets without touching ~/.codex, or update a workspace/instance to the latest ECC configuration.
+description: Create, inspect, or refresh a Codex + ECC multi-repository workspace with workspace-local ECC assets. Use when Codex needs to bootstrap a repo like codex-ecc, support Nix or portable Linux/macOS direnv setup, keep projects under repos/, copy ECC .codex and .agents/skills assets without touching ~/.codex, or update a workspace/instance to the latest ECC configuration.
 ---
 
 # Codex ECC Workspace
@@ -22,8 +22,8 @@ Treat ECC as workspace-local configuration, not as a global Codex installer.
 ## Task Router
 
 - **Create a new workspace**: use `scripts/create-workspace.sh <target-dir>` from this skill, then run `direnv allow` in the new workspace and `scripts/sync-ecc.sh --force`.
-- **Create a local business instance from a reusable template**: run `scripts/bootstrap-workspace-instance.sh <name>` from the template repo. By default this updates the generated instance's `ecc-src` lock and syncs latest ECC assets, then product work happens inside `.workspaces/<name>`.
-- **Refresh ECC assets in an existing workspace**: run `scripts/sync-ecc.sh --update-lock --force` from that workspace root. This syncs the full ECC runtime, all upstream skills, and generated Codex prompts.
+- **Create a local business instance from a reusable template**: run `scripts/bootstrap-workspace-instance.sh <name>` from the template repo. By default this updates the generated instance's ECC source lock and syncs latest ECC assets, then product work happens inside `.workspaces/<name>`.
+- **Refresh ECC assets in an existing workspace**: run `scripts/sync-ecc.sh --update-lock --force` from that workspace root. This syncs the full ECC runtime, all upstream skills, and generated Codex prompts. Use `--source-mode git` to force the portable non-Nix resolver.
 - **Refresh one local business instance from the template root**: run `scripts/sync-workspace-instance.sh <name>`. If the target instance is unclear, list `scripts/sync-workspace-instance.sh --list` and ask one short question.
 - **Explain or audit the architecture**: read `references/workspace-blueprint.md`, then inspect the current workspace files.
 - **Add project repositories**: prefer `scripts/import-repo.sh`, which accepts a Git URL or local Git repository path, creates or targets a workspace instance, writes `AGENTS.workspace.md`, and updates the instance `repos.yaml`.
@@ -63,7 +63,7 @@ Read `references/workspace-blueprint.md` when you need exact file responsibiliti
 
    ```bash
    nix flake check --no-build
-   bash -n scripts/init-ecc-workspace.sh scripts/add-repo.sh scripts/import-repo.sh scripts/codex-workspace scripts/ecc-workspace scripts/sync-ecc.sh scripts/sync-workspace-instance.sh
+   bash -n scripts/ecc-env.sh scripts/resolve-ecc-source.sh scripts/init-ecc-workspace.sh scripts/add-repo.sh scripts/import-repo.sh scripts/codex-workspace scripts/ecc-workspace scripts/sync-ecc.sh scripts/sync-workspace-instance.sh
    node --check scripts/codex-session-adapter.js
    node --check scripts/codex-observe-session.js
    node --check scripts/codex-session-metrics.js
@@ -86,6 +86,13 @@ git diff -- flake.lock AGENTS.ecc.md .codex .agents/skills scripts flake.nix
 nix flake check --no-build
 ```
 
+Portable Linux/macOS refresh:
+
+```bash
+scripts/sync-ecc.sh --source-mode git --update-lock --force
+git diff -- ecc-source.lock.json AGENTS.ecc.md .codex .agents/skills scripts
+```
+
 If strict mirroring is required, pass `--prune` so local `.codex`, `.agents/skills`, and `AGENTS.ecc.md` are replaced from the current ECC source. Use this only when local custom skills do not live under `.agents/skills` or when they are intentionally backed up elsewhere.
 
 From a reusable template root, refresh one generated business instance:
@@ -96,10 +103,23 @@ scripts/sync-workspace-instance.sh <name>
 
 This updates and syncs only the selected `.workspaces/<name>` instance. It does not mutate template-root business state.
 
+## Portable Linux/macOS Workflow
+
+When Nix is unavailable, keep the same workspace boundaries and use the Git source lock:
+
+```bash
+direnv allow
+scripts/sync-ecc.sh --source-mode git --update-lock --force
+scripts/codex-ecc-doctor.js
+```
+
+Portable mode requires `bash`, `direnv`, `git`, `node >=18` with `npm`, and a globally installed `codex`. It must still keep ECC assets under `.ecc/`, `.codex/`, and `.agents/skills/`; do not write to `~/.codex`.
+
 ## Validation Checklist
 
 - `flake.nix` declares `ecc-src = github:affaan-m/ECC` with `flake = false`.
-- `.envrc` contains `use flake`.
+- `ecc-source.lock.json` records the portable Git ECC source repo, ref, and rev.
+- `.envrc` contains `use flake` plus a `scripts/ecc-env.sh` fallback for non-Nix direnv.
 - `ECC_SRC` resolves inside `direnv exec . printenv ECC_SRC`.
 - Root `AGENTS.md` defines multi-repo boundaries and says not to modify `~/.codex`.
 - Pushable template repos may contain `.codex-ecc-template`; in that mode `scripts/add-repo.sh` must refuse product repositories unless `CODEX_ECC_ALLOW_TEMPLATE_REPOS=1` is explicitly set.

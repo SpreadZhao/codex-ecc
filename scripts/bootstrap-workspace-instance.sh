@@ -13,12 +13,12 @@ by the template repository. The generated instance is its own Git repository
 and can track repos.yaml, child repository routing, and local workspace state
 without dirtying the template.
 
-By default this creates the instance, updates the instance ecc-src flake lock,
+By default this creates the instance, updates the instance ECC source lock,
 and syncs the latest ECC assets into the instance.
 
 Options:
   --no-sync        create the instance without running scripts/sync-ecc.sh
-  --no-update-lock sync using the template-pinned ECC lock instead of latest
+  --no-update-lock sync using the template-pinned ECC source instead of latest
   --sync           accepted for backwards compatibility; sync is now default
   --update-lock    accepted for backwards compatibility; update is now default
   -h, --help       show this help

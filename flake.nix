@@ -1,5 +1,5 @@
 {
-  description = "Codex + ECC multi-repository workspace for NixOS";
+  description = "Codex + ECC multi-repository workspace";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";

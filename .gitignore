@@ -10,6 +10,7 @@ result-*
 .workspaces/
 
 # Generated local ECC runtime and lifecycle state.
+.ecc/upstream/
 .ecc/source/
 .ecc/state/
 .ecc/home/

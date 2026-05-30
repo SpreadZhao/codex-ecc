@@ -3,12 +3,14 @@
 
 const fs = require('fs');
 const path = require('path');
+const { spawnSync } = require('child_process');
 
 const ROOT = path.resolve(__dirname, '..');
 
 const REQUIRED_FILES = [
   'flake.nix',
   'flake.lock',
+  'ecc-source.lock.json',
   '.envrc',
   'AGENTS.md',
   'AGENTS.ecc.md',
@@ -34,6 +36,7 @@ const REQUIRED_EXECUTABLES = [
   'scripts/ecc-workspace',
   'scripts/bootstrap-workspace-instance.sh',
   'scripts/sync-workspace-instance.sh',
+  'scripts/resolve-ecc-source.sh',
   'scripts/sync-ecc.sh',
   'scripts/init-ecc-workspace.sh',
   'scripts/bootstrap-ecc-node-deps.sh',
@@ -325,10 +328,81 @@ function checkGitIgnore() {
     return;
   }
   const raw = read('.gitignore');
-  for (const pattern of ['.workspaces/', '.ecc/source/', '.ecc/state/', '.ecc/home/', '.ecc/codex-home/', '.npm-cache/', '.npm-global/']) {
+  for (const pattern of ['.workspaces/', '.ecc/upstream/', '.ecc/source/', '.ecc/state/', '.ecc/home/', '.ecc/codex-home/', '.npm-cache/', '.npm-global/']) {
     if (raw.includes(pattern)) ok(`.gitignore ignores ${pattern}`);
     else fail(`.gitignore missing ${pattern}`);
   }
+}
+
+function checkPortableLock() {
+  const lockPath = 'ecc-source.lock.json';
+  if (!exists(lockPath)) {
+    fail(`${lockPath} missing`);
+    return;
+  }
+
+  let lock;
+  try {
+    lock = JSON.parse(read(lockPath));
+  } catch (error) {
+    fail(`${lockPath} is not valid JSON: ${error.message}`);
+    return;
+  }
+
+  if (/^https:\/\/github\.com\/.+\/.+\.git$/.test(String(lock.repo || ''))) ok('portable ECC lock has GitHub repo URL');
+  else fail('portable ECC lock missing valid repo URL');
+
+  if (String(lock.ref || '').length > 0) ok('portable ECC lock has ref');
+  else fail('portable ECC lock missing ref');
+
+  if (/^[0-9a-f]{40}$/i.test(String(lock.rev || ''))) ok('portable ECC lock has commit rev');
+  else fail('portable ECC lock missing 40-character rev');
+}
+
+function checkPortableEnv() {
+  if (!exists('.envrc')) {
+    fail('.envrc missing');
+    return;
+  }
+
+  const raw = read('.envrc');
+  if (raw.includes('use flake')) ok('.envrc keeps Nix flake path');
+  else fail('.envrc missing Nix flake path');
+
+  if (raw.includes('source_env scripts/ecc-env.sh')) ok('.envrc has portable fallback');
+  else fail('.envrc missing portable fallback');
+
+  if (exists('scripts/ecc-env.sh')) ok('scripts/ecc-env.sh exists');
+  else fail('scripts/ecc-env.sh missing');
+}
+
+function commandVersion(command, args = ['--version']) {
+  const result = spawnSync(`${command} ${args.join(' ')}`, { encoding: 'utf8', shell: true });
+  if (result.status !== 0) return '';
+  return `${result.stdout || result.stderr}`.trim();
+}
+
+function commandPath(command) {
+  const result = spawnSync(`command -v ${command}`, { encoding: 'utf8', shell: true });
+  if (result.status !== 0) return '';
+  return `${result.stdout || result.stderr}`.trim();
+}
+
+function checkPortableHostTools() {
+  const gitVersion = commandVersion('git');
+  if (gitVersion) ok(`git available: ${gitVersion.split('\n')[0]}`);
+  else fail('git missing; install git for non-Nix ECC source sync');
+
+  const npmVersion = commandVersion('npm', ['--version']);
+  const npmPath = commandPath('npm');
+  if (npmVersion) ok(`npm available: ${npmVersion.split('\n')[0]}`);
+  else if (npmPath) ok(`npm available: ${npmPath.split('\n')[0]}`);
+  else fail('npm missing; install Node.js with npm for ECC runtime dependencies');
+
+  const nodeVersion = process.versions.node || '';
+  const major = Number(nodeVersion.split('.')[0] || 0);
+  if (major >= 18) ok(`node >=18 available: ${nodeVersion}`);
+  else fail(`node >=18 required, found ${nodeVersion || 'unknown'}`);
 }
 
 function checkTemplateBoundary() {
@@ -403,6 +477,9 @@ function main() {
   checkSkillFrontmatter();
   checkCodexNativeHooks();
   checkGitIgnore();
+  checkPortableLock();
+  checkPortableEnv();
+  checkPortableHostTools();
   checkTemplateBoundary();
   checkFlake();
   checkLocalStateBoundary();

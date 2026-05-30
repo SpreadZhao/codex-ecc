@@ -8,7 +8,7 @@ usage() {
 Usage: scripts/sync-workspace-instance.sh [--no-update-lock] <name|instance-path>
 
 Refresh one local .workspaces instance from the template root. By default this
-updates the instance ecc-src flake lock and syncs latest ECC assets.
+updates the instance ECC source lock and syncs latest ECC assets.
 
 Options:
   --no-update-lock  sync using the instance-pinned ECC lock
@@ -50,7 +50,7 @@ done
 
 if [ "$LIST" -eq 1 ]; then
   if [ -d "$ROOT/.workspaces" ]; then
-    find "$ROOT/.workspaces" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort
+    find "$ROOT/.workspaces" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort
   fi
   exit 0
 fi

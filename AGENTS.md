@@ -5,7 +5,7 @@ This is a multi-repository workspace managed by Codex with workspace-local ECC a
 This checkout is also a reusable capability template when `.codex-ecc-template`
 exists. In template mode, do not add business repositories directly at the
 root; create a local instance first with `scripts/bootstrap-workspace-instance.sh`.
-That command defaults to updating the generated instance's `ecc-src` lock and
+That command defaults to updating the generated instance's ECC source lock and
 syncing the latest workspace-local ECC assets.
 
 ## Workspace Layout
@@ -14,7 +14,7 @@ syncing the latest workspace-local ECC assets.
 - Each direct child under `repos/` is an independent project unless the user explicitly says otherwise.
 - `repos.yaml` is the authoritative registry for repository paths, roles, build commands, and verification commands.
 - `.codex/`, `.agents/skills/`, and `.ecc/` are workspace-local ECC/Codex assets. Do not sync them into `~/.codex`.
-- `.ecc/source/` is a generated mirror of the pinned ECC source from `flake.lock`.
+- `.ecc/source/` is a generated mirror of the pinned ECC source from `flake.lock` on Nix or `ecc-source.lock.json` without Nix.
 - `.ecc/state/` and `.ecc/home/` are generated local runtime state and should not be treated as product code.
 - `.workspaces/` contains ignored local business workspace instances generated from the reusable template.
 
@@ -38,6 +38,7 @@ Also read these files when they exist:
 - When the user asks from the template root to create a workspace, run `scripts/bootstrap-workspace-instance.sh <name>` unless they explicitly ask to pin the template lock. Use `--no-update-lock` only when the user wants the current pinned ECC input.
 - When the user asks from the template root to update an existing workspace's ECC configuration, run `scripts/sync-workspace-instance.sh <name>`. If the target is unclear, list instances with `scripts/sync-workspace-instance.sh --list` and ask one short question.
 - `scripts/sync-workspace-instance.sh <name>` refreshes the selected `.workspaces/<name>` instance only; it should not add business state to the template root.
+- On non-Nix Linux/macOS, use the same root scripts; they resolve ECC through `ecc-source.lock.json` and `.ecc/upstream/` instead of Nix.
 
 ## Multi-Repository Work
 

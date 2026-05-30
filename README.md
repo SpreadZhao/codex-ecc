@@ -2,7 +2,7 @@
 
 This directory is a workspace-local Codex + ECC environment for managing many independent projects under `repos/`.
 
-Codex itself is expected to be installed globally. The Nix flake provides the workspace tools, ECC wrappers, a pinned ECC source, and optional package outputs; ECC runtime assets stay inside this directory.
+Codex itself is expected to be installed globally. On NixOS, the Nix flake provides the workspace tools, ECC wrappers, a pinned ECC source, and optional package outputs. On non-Nix Linux/macOS, direnv loads a portable environment and `ecc-source.lock.json` pins the ECC Git source. ECC runtime assets stay inside this directory in both modes.
 
 ## Template and Instances
 
@@ -27,6 +27,7 @@ Things you can ask Codex from the template root:
 - "List my local workspaces." Codex should run `scripts/sync-workspace-instance.sh --list` or `scripts/import-repo.sh --list-instances`.
 - "Update the `android` workspace ECC configuration." Codex should run `scripts/sync-workspace-instance.sh android`.
 - "Update this template root to the latest ECC configuration." Codex should run `scripts/sync-ecc.sh --update-lock --force` from the template root.
+- "Update this template root using the portable Git ECC source." Codex should run `scripts/sync-ecc.sh --source-mode git --update-lock --force`.
 - "Add this GitHub repository to the `android` workspace: `<git-url>`." Codex should run `scripts/import-repo.sh --instance android <git-url>`.
 - "Copy this local Git repository into the `android` workspace: `<path>`." Codex should run `scripts/import-repo.sh --instance android <path>`.
 - "Create a new workspace named `android` and add this repository: `<git-url-or-path>`." Codex should run `scripts/import-repo.sh --new-instance android <git-url-or-path>`.
@@ -46,7 +47,7 @@ codex
 ```
 
 `scripts/bootstrap-workspace-instance.sh` updates the generated instance's
-`ecc-src` lock and syncs latest ECC assets by default. The generated instance is
+ECC source lock and syncs latest ECC assets by default. The generated instance is
 an independent Git repository under `.workspaces/`, which is ignored by this
 template. It can track `repos.yaml`, local routing decisions, and child
 repository state without dirtying the reusable template repo.
@@ -63,8 +64,22 @@ ECC with `scripts/sync-ecc.sh --update-lock --force`.
 
 ## Quick Start
 
+NixOS or Nix with nix-direnv:
+
 ```bash
 direnv allow
+./scripts/bootstrap-workspace-instance.sh my-apps
+cd .workspaces/my-apps
+direnv allow
+./scripts/import-repo.sh git@github.com:you/repo-a.git
+codex
+```
+
+Non-Nix Linux/macOS:
+
+```bash
+direnv allow
+./scripts/sync-ecc.sh --source-mode git --update-lock --force
 ./scripts/bootstrap-workspace-instance.sh my-apps
 cd .workspaces/my-apps
 direnv allow
@@ -92,7 +107,8 @@ direnv exec . codex
 
 `scripts/sync-ecc.sh --force` now performs a full workspace-local sync:
 
-- `.ecc/source/` mirrors the pinned upstream ECC source from `flake.lock`.
+- `.ecc/source/` mirrors the pinned upstream ECC source from `flake.lock` in Nix mode or `ecc-source.lock.json` in portable Git mode.
+- `.ecc/upstream/` stores the ignored portable Git checkout used on non-Nix Linux/macOS.
 - `.agents/skills/` receives the upstream `.agents/skills` set plus the full root `skills/` catalog.
 - `.codex/prompts/` is generated from upstream `commands/*.md`.
 - `.codex/hooks.json` is generated for native Codex hooks on Codex 0.133+.
@@ -107,7 +123,17 @@ ecc plan --profile minimal --target codex
 ecc status --json
 ```
 
-On first use, `scripts/ecc-workspace` bootstraps upstream ECC npm runtime dependencies into `.ecc/source/node_modules` with `npm ci --omit=dev`. Set `CODEX_ECC_AUTO_NPM_INSTALL=0` to disable that behavior and run `scripts/bootstrap-ecc-node-deps.sh` manually. Both `codex` and `ecc` wrappers force npm/npx writes into `.npm-global/` and `.npm-cache/`, so MCP servers launched through `.codex/config.toml` stay workspace-local on NixOS.
+On first use, `scripts/ecc-workspace` bootstraps upstream ECC npm runtime dependencies into `.ecc/source/node_modules` with `npm ci --omit=dev`. Set `CODEX_ECC_AUTO_NPM_INSTALL=0` to disable that behavior and run `scripts/bootstrap-ecc-node-deps.sh` manually. Both `codex` and `ecc` wrappers force npm/npx writes into `.npm-global/` and `.npm-cache/`, so MCP servers launched through `.codex/config.toml` stay workspace-local on NixOS and in portable mode.
+
+Portable mode prerequisites:
+
+- `bash`
+- `direnv`
+- `git`
+- `node >=18` with `npm`
+- globally installed `codex`
+
+`scripts/sync-ecc.sh` accepts `--source-mode auto|nix|git`. `auto` uses a Nix store `ECC_SRC` when direnv loaded the flake; otherwise it uses the portable Git resolver. Use `--source-mode git` to force non-Nix behavior.
 
 `codex` sessions launched from this workspace set `CLAUDE_PLUGIN_ROOT` and `ECC_PLUGIN_ROOT` to the local ECC runtime. The wrapper also runs ECC session start/end hooks around Codex, adapts new Codex rollout JSONL into the ECC session-summary format, replays Codex tool calls into ECC continuous-learning observation hooks, and stores generated lifecycle and learning data under `.ecc/state/` with an isolated hook home under `.ecc/home/`.
 

@@ -10,7 +10,7 @@ if [ ! -d "$ECC_RUNTIME" ]; then
 fi
 
 if [ -z "$ECC_RUNTIME" ] || [ ! -d "$ECC_RUNTIME" ]; then
-  echo "Could not find ECC runtime. Run scripts/sync-ecc.sh --force after entering the Nix dev shell." >&2
+  echo "Could not find ECC runtime. Run scripts/sync-ecc.sh --force first." >&2
   exit 1
 fi
 

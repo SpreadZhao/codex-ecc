@@ -68,7 +68,7 @@ validate_name() {
 list_instances() {
   local dir="$ROOT/.workspaces"
   [ -d "$dir" ] || return 0
-  find "$dir" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort
+  find "$dir" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort
 }
 
 resolve_instance() {
@@ -141,7 +141,9 @@ update_repos_yaml() {
   fi
 
   if grep -Fxq 'repositories: {}' "$repos_yaml"; then
-    sed -i 's/^repositories: {}/repositories:/' "$repos_yaml"
+    tmp="$(mktemp)"
+    sed 's/^repositories: {}/repositories:/' "$repos_yaml" > "$tmp"
+    mv "$tmp" "$repos_yaml"
   fi
 
   cat >> "$repos_yaml" <<EOF

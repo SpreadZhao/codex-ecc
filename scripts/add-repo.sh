@@ -94,7 +94,9 @@ else
     echo "repos.yaml already contains $NAME; leaving existing metadata unchanged"
   else
     if grep -Fxq 'repositories: {}' "$ROOT/repos.yaml"; then
-      sed -i 's/^repositories: {}/repositories:/' "$ROOT/repos.yaml"
+      tmp="$(mktemp)"
+      sed 's/^repositories: {}/repositories:/' "$ROOT/repos.yaml" > "$tmp"
+      mv "$tmp" "$ROOT/repos.yaml"
     fi
     cat >> "$ROOT/repos.yaml" <<REPOS_EOF
   $NAME:

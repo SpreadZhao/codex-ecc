@@ -7,7 +7,7 @@ cd "$ROOT"
 find_real_codex() {
   local shim="$ROOT/scripts/bin/codex"
   local shim_real
-  shim_real="$(readlink -f "$shim" 2>/dev/null || printf '%s\n' "$shim")"
+  shim_real="$(portable_realpath "$shim")"
 
   local dir candidate candidate_real
   local old_ifs="$IFS"
@@ -17,7 +17,7 @@ find_real_codex() {
     [ -n "$dir" ] || dir=.
     candidate="$dir/codex"
     if [ -x "$candidate" ]; then
-      candidate_real="$(readlink -f "$candidate" 2>/dev/null || printf '%s\n' "$candidate")"
+      candidate_real="$(portable_realpath "$candidate")"
       if [ "$candidate_real" != "$shim_real" ]; then
         printf '%s\n' "$candidate"
         return 0
@@ -27,6 +27,64 @@ find_real_codex() {
   done
   IFS="$old_ifs"
   return 1
+}
+
+portable_realpath() {
+  local target="$1"
+  if command -v node >/dev/null 2>&1; then
+    node -e '
+      const fs = require("fs");
+      const path = require("path");
+      try {
+        process.stdout.write(`${fs.realpathSync(process.argv[1])}\n`);
+      } catch {
+        process.stdout.write(`${path.resolve(process.argv[1])}\n`);
+      }
+    ' "$target"
+  else
+    (cd "$(dirname "$target")" 2>/dev/null && printf '%s/%s\n' "$(pwd -P)" "$(basename "$target")") || printf '%s\n' "$target"
+  fi
+}
+
+find_latest_codex_transcript() {
+  local sessions_dir="$1"
+  local marker="$2"
+
+  node - "$sessions_dir" "$marker" <<'NODE'
+'use strict';
+
+const fs = require('fs');
+const path = require('path');
+
+const root = process.argv[2];
+const marker = process.argv[3];
+const markerMtime = fs.statSync(marker).mtimeMs;
+const matches = [];
+
+function walk(dir) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      walk(fullPath);
+    } else if (entry.isFile() && /^rollout-.*\.jsonl$/.test(entry.name)) {
+      const stat = fs.statSync(fullPath);
+      if (stat.mtimeMs > markerMtime) matches.push({ path: fullPath, mtime: stat.mtimeMs });
+    }
+  }
+}
+
+if (fs.existsSync(root)) walk(root);
+matches.sort((a, b) => a.mtime - b.mtime);
+if (matches.length > 0) process.stdout.write(matches[matches.length - 1].path);
+NODE
+}
+
+utc_now_millis() {
+  if command -v node >/dev/null 2>&1; then
+    node -e 'process.stdout.write(new Date().toISOString())'
+  else
+    date -u +%Y-%m-%dT%H:%M:%SZ
+  fi
 }
 
 REAL_CODEX="$(find_real_codex || true)"
@@ -67,7 +125,7 @@ SESSION_ID="${ECC_SESSION_ID:-codex-$(date +%Y%m%d-%H%M%S)-$$}"
 export ECC_SESSION_ID="$SESSION_ID"
 export CLAUDE_SESSION_ID="${CLAUDE_SESSION_ID:-$SESSION_ID}"
 
-SESSION_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
+SESSION_STARTED_AT="$(utc_now_millis)"
 START_MARKER="$ECC_STATE_DIR/lifecycle/$SESSION_ID.start"
 LIFECYCLE_LOG="$ECC_STATE_DIR/lifecycle/codex-lifecycle.log"
 touch "$START_MARKER"
@@ -102,7 +160,7 @@ CODEX_SESSIONS_DIR="${CODEX_HOME:-$HOME/.codex}/sessions"
 if [ "$PROCESS_TRANSCRIPTS" = "0" ]; then
   echo "[codex-workspace] Skipping transcript post-processing inside existing Codex thread $CODEX_THREAD_ID" >>"$LIFECYCLE_LOG"
 elif [ -d "$CODEX_SESSIONS_DIR" ]; then
-  TRANSCRIPT_PATH="$(find "$CODEX_SESSIONS_DIR" -type f -name 'rollout-*.jsonl' -newer "$START_MARKER" -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1 | cut -d' ' -f2- || true)"
+  TRANSCRIPT_PATH="$(find_latest_codex_transcript "$CODEX_SESSIONS_DIR" "$START_MARKER" 2>/dev/null || true)"
 fi
 
 HOOK_TRANSCRIPT="$TRANSCRIPT_PATH"

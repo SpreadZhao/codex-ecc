@@ -1,4 +1,4 @@
 interface:
   display_name: "Codex ECC Workspace"
   short_description: "Create and sync ECC workspaces"
-  default_prompt: "Use $codex-ecc-workspace to create a NixOS Codex workspace with workspace-local ECC assets."
+  default_prompt: "Use $codex-ecc-workspace to create a Codex workspace with workspace-local ECC assets on NixOS, Linux, or macOS."

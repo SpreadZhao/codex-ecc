@@ -38,9 +38,13 @@ seed_from_source_workspace() {
 
   for spec in \
     "flake.nix:0644" \
+    ".envrc:0644" \
     ".gitignore:0644" \
+    "ecc-source.lock.json:0644" \
     "AGENTS.md:0644" \
     "README.md:0644" \
+    "scripts/ecc-env.sh:0644" \
+    "scripts/resolve-ecc-source.sh:0755" \
     "scripts/init-ecc-workspace.sh:0755" \
     "scripts/sync-ecc.sh:0755" \
     "scripts/add-repo.sh:0755" \
@@ -79,7 +83,7 @@ seed_from_source_workspace "$(source_workspace_root)"
 
 write_if_missing "$ROOT/flake.nix" <<'EOF'
 {
-  description = "Codex + ECC multi-repository workspace for NixOS";
+  description = "Codex + ECC multi-repository workspace";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -136,7 +140,11 @@ write_if_missing "$ROOT/flake.nix" <<'EOF'
 EOF
 
 write_if_missing "$ROOT/.envrc" <<'EOF'
-use flake
+if [ "$(uname -s)" = "Linux" ] && command -v nix >/dev/null 2>&1 && type use_flake >/dev/null 2>&1; then
+  use flake
+else
+  source_env scripts/ecc-env.sh
+fi
 EOF
 
 write_if_missing "$ROOT/.gitignore" <<'EOF'
@@ -149,6 +157,7 @@ result-*
 *.log
 
 .workspaces/
+.ecc/upstream/
 .ecc/source/
 .ecc/state/
 .ecc/home/
@@ -157,6 +166,15 @@ result-*
 repos/*
 !repos/.gitkeep
 !repos/README.md
+EOF
+
+write_if_missing "$ROOT/ecc-source.lock.json" <<'EOF'
+{
+  "repo": "https://github.com/affaan-m/ECC.git",
+  "ref": "main",
+  "rev": "64cd1ba248e77e377e76f70fc4e6434bfdddd511",
+  "updated_at": "2026-05-30T00:00:00Z"
+}
 EOF
 
 write_if_missing "$ROOT/AGENTS.md" <<'EOF'
@@ -215,7 +233,7 @@ write_if_missing "$ROOT/README.md" <<'EOF'
 
 This directory is a workspace-local Codex + ECC environment for managing many independent projects under `repos/`.
 
-Codex itself is expected to be installed globally. The Nix flake only provides workspace tools, and the ECC rules and skills stay inside this directory.
+Codex itself is expected to be installed globally. Nix users can load the flake through direnv; non-Nix Linux/macOS users use the portable direnv fallback plus `ecc-source.lock.json`. ECC rules and skills stay inside this directory.
 EOF
 
 write_if_missing "$ROOT/repos.yaml" <<'EOF'
@@ -253,7 +271,7 @@ case "${1:-}" in
 esac
 
 if [ -z "${ECC_SRC:-}" ]; then
-  echo "ECC_SRC is not set. Enter the Nix dev shell first, for example: direnv allow" >&2
+  echo "ECC_SRC is not set. Run scripts/sync-ecc.sh or source scripts/ecc-env.sh first." >&2
   exit 1
 fi
 
@@ -271,11 +289,11 @@ copy_entry() {
   if [ -d "$src" ]; then
     mkdir -p "$dest"
     chmod -R u+w "$dest" 2>/dev/null || true
-    cp -R --no-preserve=mode,ownership "$src/." "$dest/"
+    cp -R "$src/." "$dest/"
     chmod -R u+w "$dest" 2>/dev/null || true
   else
     chmod u+w "$dest" 2>/dev/null || true
-    cp --no-preserve=mode,ownership "$src" "$dest"
+    cp "$src" "$dest"
     chmod u+w "$dest" 2>/dev/null || true
   fi
   echo "copied: ${dest#$ROOT/}"
@@ -352,9 +370,9 @@ sanitize_codex_project_config() {
 }
 
 if [ -d "$ECC_SRC/.codex" ]; then
-  while IFS= read -r -d '' item; do
+  while IFS= read -r item; do
     copy_entry "$item" "$ROOT/.codex/$(basename "$item")"
-  done < <(find "$ECC_SRC/.codex" -mindepth 1 -maxdepth 1 -print0)
+  done < <(find "$ECC_SRC/.codex" -mindepth 1 -maxdepth 1 -print | sort)
   sanitize_codex_project_config
 fi
 
@@ -363,9 +381,9 @@ if [ -f "$ECC_SRC/AGENTS.md" ]; then
 fi
 
 if [ -d "$ECC_SRC/.agents/skills" ]; then
-  while IFS= read -r -d '' skill; do
+  while IFS= read -r skill; do
     copy_entry "$skill" "$ROOT/.agents/skills/$(basename "$skill")"
-  done < <(find "$ECC_SRC/.agents/skills" -mindepth 1 -maxdepth 1 -print0)
+  done < <(find "$ECC_SRC/.agents/skills" -mindepth 1 -maxdepth 1 -print | sort)
 fi
 
 if [ ! -f "$ROOT/repos.yaml" ]; then
@@ -439,7 +457,9 @@ else
     echo "repos.yaml already contains $NAME; leaving existing metadata unchanged"
   else
     if grep -Fxq 'repositories: {}' "$ROOT/repos.yaml"; then
-      sed -i 's/^repositories: {}/repositories:/' "$ROOT/repos.yaml"
+      tmp="$(mktemp)"
+      sed 's/^repositories: {}/repositories:/' "$ROOT/repos.yaml" > "$tmp"
+      mv "$tmp" "$ROOT/repos.yaml"
     fi
     cat >> "$ROOT/repos.yaml" <<REPOS_EOF
   $NAME:
@@ -467,7 +487,7 @@ cd "$ROOT"
 find_real_codex() {
   local shim="$ROOT/scripts/bin/codex"
   local shim_real
-  shim_real="$(readlink -f "$shim" 2>/dev/null || printf '%s\n' "$shim")"
+  shim_real="$(portable_realpath "$shim")"
 
   local dir candidate candidate_real
   local old_ifs="$IFS"
@@ -477,7 +497,7 @@ find_real_codex() {
     [ -n "$dir" ] || dir=.
     candidate="$dir/codex"
     if [ -x "$candidate" ]; then
-      candidate_real="$(readlink -f "$candidate" 2>/dev/null || printf '%s\n' "$candidate")"
+      candidate_real="$(portable_realpath "$candidate")"
       if [ "$candidate_real" != "$shim_real" ]; then
         printf '%s\n' "$candidate"
         return 0
@@ -487,6 +507,23 @@ find_real_codex() {
   done
   IFS="$old_ifs"
   return 1
+}
+
+portable_realpath() {
+  local target="$1"
+  if command -v node >/dev/null 2>&1; then
+    node -e '
+      const fs = require("fs");
+      const path = require("path");
+      try {
+        process.stdout.write(`${fs.realpathSync(process.argv[1])}\n`);
+      } catch {
+        process.stdout.write(`${path.resolve(process.argv[1])}\n`);
+      }
+    ' "$target"
+  else
+    (cd "$(dirname "$target")" 2>/dev/null && printf '%s/%s\n' "$(pwd -P)" "$(basename "$target")") || printf '%s\n' "$target"
+  fi
 }
 
 REAL_CODEX="$(find_real_codex || true)"
@@ -514,6 +551,22 @@ else
   echo "skip existing: scripts/sync-ecc.sh"
 fi
 
+if [ ! -e "$ROOT/scripts/ecc-env.sh" ] && [ -f "$SCRIPT_DIR/ecc-env.sh" ]; then
+  cp "$SCRIPT_DIR/ecc-env.sh" "$ROOT/scripts/ecc-env.sh"
+  chmod 0644 "$ROOT/scripts/ecc-env.sh"
+  echo "created: scripts/ecc-env.sh"
+else
+  echo "skip existing: scripts/ecc-env.sh"
+fi
+
+if [ ! -e "$ROOT/scripts/resolve-ecc-source.sh" ] && [ -f "$SCRIPT_DIR/resolve-ecc-source.sh" ]; then
+  cp "$SCRIPT_DIR/resolve-ecc-source.sh" "$ROOT/scripts/resolve-ecc-source.sh"
+  chmod +x "$ROOT/scripts/resolve-ecc-source.sh"
+  echo "created: scripts/resolve-ecc-source.sh"
+else
+  echo "skip existing: scripts/resolve-ecc-source.sh"
+fi
+
 if [ ! -e "$ROOT/scripts/sync-workspace-instance.sh" ] && [ -f "$SCRIPT_DIR/sync-workspace-instance.sh" ]; then
   cp "$SCRIPT_DIR/sync-workspace-instance.sh" "$ROOT/scripts/sync-workspace-instance.sh"
   chmod +x "$ROOT/scripts/sync-workspace-instance.sh"
@@ -530,4 +583,4 @@ if [ ! -d "$ROOT/.git" ]; then
 fi
 
 echo "Workspace scaffold ready at $ROOT"
-echo "Next: cd $ROOT && git add . && direnv allow && scripts/sync-ecc.sh --force"
+echo "Next: cd $ROOT && git add . && direnv allow && scripts/sync-ecc.sh --update-lock --force"

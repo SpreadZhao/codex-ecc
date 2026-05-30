@@ -1,6 +1,6 @@
 # Codex + ECC Workspace Blueprint
 
-Use this reference when creating, auditing, or refreshing a NixOS Codex + ECC multi-repository workspace.
+Use this reference when creating, auditing, or refreshing a Codex + ECC multi-repository workspace on NixOS, non-Nix Linux, or macOS.
 
 ## Core Design
 
@@ -8,7 +8,8 @@ The workspace uses:
 
 - Global Codex installation.
 - Workspace-local full ECC runtime assets.
-- `flake.nix` and `direnv` for tools.
+- `flake.nix` and `direnv` for Nix tooling.
+- `ecc-source.lock.json` and Git for portable non-Nix ECC source resolution.
 - `repos.yaml` for multi-repository routing.
 - `repos/` for independent child Git repositories.
 - Optional `.codex-ecc-template` marker for a pushable base capability repo.
@@ -22,6 +23,7 @@ Do not sync ECC into `~/.codex`. Do not run ECC global sync scripts as the defau
 codex-ecc/
 ├── flake.nix
 ├── flake.lock
+├── ecc-source.lock.json
 ├── .envrc
 ├── .gitignore
 ├── AGENTS.md
@@ -39,6 +41,7 @@ codex-ecc/
 ├── .agents/
 │   └── skills/
 ├── .ecc/
+│   ├── upstream/     # ignored portable Git ECC checkout
 │   ├── source/       # generated full ECC source mirror
 │   ├── state/        # generated lifecycle/learning state
 │   └── home/         # isolated hook home for ECC lifecycle hooks
@@ -59,6 +62,8 @@ codex-ecc/
     ├── generate-codex-native-hooks.js
     ├── codex-ecc-doctor.js
     ├── install-ecc-git-hooks.sh
+    ├── ecc-env.sh
+    ├── resolve-ecc-source.sh
     ├── bootstrap-workspace-instance.sh
     ├── sync-workspace-instance.sh
     ├── init-ecc-workspace.sh
@@ -74,7 +79,8 @@ codex-ecc/
 |---|---|
 | `flake.nix` | Provide workspace tools, ECC wrappers, and package outputs; do not install Codex globally. |
 | `flake.lock` | Pin ECC and nixpkgs inputs. |
-| `.envrc` | Load the flake with `use flake`. |
+| `ecc-source.lock.json` | Pin the portable Git ECC source repo/ref/rev for non-Nix Linux/macOS. |
+| `.envrc` | Load the flake with `use flake` when available, otherwise source `scripts/ecc-env.sh`. |
 | `AGENTS.md` | Workspace instructions, multi-repo boundaries, Git rules, ECC boundary. |
 | `.codex-ecc-template` | Optional marker meaning this checkout is the reusable capability layer; product repos should be added only in generated instances. |
 | `AGENTS.ecc.md` | Copied upstream ECC root instructions. |
@@ -83,6 +89,7 @@ codex-ecc/
 | `.codex/git-hooks/` | Copied ECC Codex git hooks used by the per-repository installer; never installed globally by default. |
 | `.agents/skills/` | Full upstream ECC skill catalog plus any explicitly local workspace skills. |
 | `.ecc/source/` | Generated mirror of the pinned ECC source used by local wrappers and hook adapters. |
+| `.ecc/upstream/` | Ignored portable Git checkout used to populate `.ecc/source/` without Nix. |
 | `.ecc/state/` | Generated Codex lifecycle, transcript, observed-transcript stamps, and continuous-learning state. |
 | `.ecc/home/` | Isolated HOME used only while running ECC hooks from the Codex wrapper. |
 | `.workspaces/` | Ignored local business workspace instances, each with its own Git repository and `repos.yaml`. |
@@ -128,6 +135,8 @@ export CODEX_ECC_BIN="$PWD/scripts/bin"
 export PATH="$CODEX_ECC_BIN:$NPM_CONFIG_PREFIX/bin:$PATH"
 ```
 
+For non-Nix Linux/macOS, `scripts/ecc-env.sh` should export the same workspace-local variables and should not require Nix. Required host tools are `bash`, `direnv`, `git`, `node >=18`, `npm`, and globally installed `codex`.
+
 `scripts/bin/codex` is a workspace-local PATH shim. It should call `scripts/codex-workspace` so commands such as `codex`, `codex resume`, and `codex exec` all start with `--cd <workspace-root>`. `scripts/codex-workspace` must resolve the real global Codex binary while skipping this shim to avoid recursion.
 
 For Codex versions with native hook support, `.codex/hooks.json` should route SessionStart, PreToolUse, PostToolUse, PreCompact, and Stop events through `scripts/codex-native-hook-adapter.js`. The adapter normalizes Codex hook payloads into the Claude-shaped payload expected by ECC hook scripts and runs them against the workspace-local `.ecc/source` runtime with `HOME=.ecc/home`.
@@ -138,13 +147,13 @@ The observation bridge should default to direct `observations.jsonl` writes for 
 
 `scripts/bin/ecc` should call `scripts/ecc-workspace`, which executes the pinned local ECC runtime with workspace-local `HOME=.ecc/home`, `CODEX_HOME`, `AGENTS_HOME`, `CLV2_HOMUNCULUS_DIR`, and hook directories.
 
-Both `scripts/codex-workspace` and `scripts/ecc-workspace` should set `NPM_CONFIG_PREFIX`, `NPM_CONFIG_CACHE`, `npm_config_prefix`, and `npm_config_cache` to workspace-local directories. This keeps ECC npm bootstrapping and Codex MCP `npx` launches out of user-level npm state, which is important on NixOS and in sandboxed runs.
+Both `scripts/codex-workspace` and `scripts/ecc-workspace` should set `NPM_CONFIG_PREFIX`, `NPM_CONFIG_CACHE`, `npm_config_prefix`, and `npm_config_cache` to workspace-local directories. This keeps ECC npm bootstrapping and Codex MCP `npx` launches out of user-level npm state, which is important on NixOS, non-Nix Linux/macOS, and sandboxed runs.
 
 `scripts/codex-workspace` should support `CODEX_ECC_LOCAL_CODEX_HOME=1`, setting `CODEX_HOME` to `.ecc/codex-home` for sessions that must avoid user-level `~/.codex` writes. Keep this opt-in unless the workspace also provisions local Codex auth/config.
 
 `scripts/codex-ecc-doctor.js` should validate the workspace-local Codex/ECC surface: copied config, skills, prompts, git hooks, wrappers, flake entries, and project-local Codex config sanitation. It must not read or write `~/.codex`. `scripts/install-ecc-git-hooks.sh <repo>` should install `.codex/git-hooks/pre-commit` and `.codex/git-hooks/pre-push` into exactly one Git repository's `.git/hooks/` directory; it must not set global `core.hooksPath`.
 
-For a pushable template checkout, add `.codex-ecc-template` and keep `repos.yaml` empty. `scripts/add-repo.sh` should refuse to add repositories in this mode unless `CODEX_ECC_ALLOW_TEMPLATE_REPOS=1` is set. `scripts/bootstrap-workspace-instance.sh <name>` should generate `.workspaces/<name>` by invoking the skill's `create-workspace.sh`, remove the template marker from the generated instance, update the instance's `ecc-src` lock and sync latest ECC assets by default, and leave the instance as an independent Git repository. Work inside that instance for product repos and local routing state.
+For a pushable template checkout, add `.codex-ecc-template` and keep `repos.yaml` empty. `scripts/add-repo.sh` should refuse to add repositories in this mode unless `CODEX_ECC_ALLOW_TEMPLATE_REPOS=1` is set. `scripts/bootstrap-workspace-instance.sh <name>` should generate `.workspaces/<name>` by invoking the skill's `create-workspace.sh`, remove the template marker from the generated instance, update the instance's ECC source lock and sync latest ECC assets by default, and leave the instance as an independent Git repository. Work inside that instance for product repos and local routing state.
 
 From the template root, `scripts/sync-workspace-instance.sh <name>` should refresh only the selected `.workspaces/<name>` instance. By default it should run that instance's `scripts/sync-ecc.sh --update-lock --force`, then run the instance doctor when available. It should support `--list` so Codex can ask the user to choose an instance when the target is unclear.
 
@@ -158,7 +167,7 @@ Standard refresh:
 scripts/sync-ecc.sh --update-lock --force
 ```
 
-This updates the `ecc-src` lock and copies upstream ECC assets into:
+This updates the Nix `ecc-src` lock when the workspace is running from a Nix store `ECC_SRC`; otherwise it updates `ecc-source.lock.json` through the portable Git resolver. It then copies upstream ECC assets into:
 
 - `AGENTS.ecc.md`
 - `.codex/`
@@ -219,6 +228,7 @@ node --check scripts/codex-native-hook-adapter.js
 node --check scripts/generate-codex-native-hooks.js
 node --check scripts/codex-ecc-doctor.js
 bash -n scripts/init-ecc-workspace.sh scripts/add-repo.sh scripts/import-repo.sh scripts/codex-workspace scripts/ecc-workspace scripts/sync-ecc.sh scripts/sync-workspace-instance.sh scripts/install-ecc-git-hooks.sh
+bash -n scripts/ecc-env.sh scripts/resolve-ecc-source.sh
 bash -n scripts/bootstrap-workspace-instance.sh
 scripts/codex-ecc-doctor.js
 git status --short

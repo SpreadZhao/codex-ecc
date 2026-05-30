@@ -39,7 +39,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ -z "${ECC_SRC:-}" ]; then
-  echo "ECC_SRC is not set. Enter the Nix dev shell first, for example: direnv allow" >&2
+  echo "ECC_SRC is not set. Run scripts/sync-ecc.sh or source scripts/ecc-env.sh first." >&2
   exit 1
 fi
 
@@ -62,11 +62,11 @@ copy_entry() {
   if [ -d "$src" ]; then
     mkdir -p "$dest"
     chmod -R u+w "$dest" 2>/dev/null || true
-    cp -R --no-preserve=mode,ownership "$src/." "$dest/"
+    cp -R "$src/." "$dest/"
     chmod -R u+w "$dest" 2>/dev/null || true
   else
     chmod u+w "$dest" 2>/dev/null || true
-    cp --no-preserve=mode,ownership "$src" "$dest"
+    cp "$src" "$dest"
     chmod u+w "$dest" 2>/dev/null || true
   fi
   echo "copied: ${dest#$ROOT/}"
@@ -84,7 +84,7 @@ copy_tree_contents() {
 
   mkdir -p "$dest"
   chmod -R u+w "$dest" 2>/dev/null || true
-  cp -R --no-preserve=mode,ownership "$src/." "$dest/"
+  cp -R "$src/." "$dest/"
   chmod -R u+w "$dest" 2>/dev/null || true
   echo "copied: ${dest#$ROOT/}"
 }
@@ -170,7 +170,7 @@ generate_codex_prompts() {
   mkdir -p "$prompts_dir"
   : > "$manifest"
 
-  while IFS= read -r -d '' command_file; do
+  while IFS= read -r command_file; do
     name="$(basename "$command_file" .md)"
     out="$prompts_dir/ecc-$name.md"
     {
@@ -185,7 +185,7 @@ generate_codex_prompts() {
       ' "$command_file"
     } > "$out"
     printf 'ecc-%s.md\n' "$name" >> "$manifest"
-  done < <(find "$commands_dir" -maxdepth 1 -type f -name '*.md' -print0 | sort -z)
+  done < <(find "$commands_dir" -maxdepth 1 -type f -name '*.md' -print | sort)
 
   sort -u "$manifest" -o "$manifest"
   echo "generated: ${prompts_dir#$ROOT/}"
@@ -281,9 +281,9 @@ sync_full_ecc_runtime() {
   copy_tree_contents "$ECC_SRC" "$runtime" "ECC full source"
 
   if [ -d "$ECC_SRC/skills" ]; then
-    while IFS= read -r -d '' skill; do
+    while IFS= read -r skill; do
       copy_entry "$skill" "$ROOT/.agents/skills/$(basename "$skill")"
-    done < <(find "$ECC_SRC/skills" -mindepth 1 -maxdepth 1 -type d -print0 | sort -z)
+    done < <(find "$ECC_SRC/skills" -mindepth 1 -maxdepth 1 -type d -print | sort)
   fi
 
   generate_codex_prompts "$ECC_SRC/commands"
@@ -291,9 +291,9 @@ sync_full_ecc_runtime() {
 }
 
 if [ -d "$ECC_SRC/.codex" ]; then
-  while IFS= read -r -d '' item; do
+  while IFS= read -r item; do
     copy_entry "$item" "$ROOT/.codex/$(basename "$item")"
-  done < <(find "$ECC_SRC/.codex" -mindepth 1 -maxdepth 1 -print0)
+  done < <(find "$ECC_SRC/.codex" -mindepth 1 -maxdepth 1 -print | sort)
   sanitize_codex_project_config
 else
   echo "warning: ECC source has no .codex directory" >&2
@@ -306,9 +306,9 @@ else
 fi
 
 if [ -d "$ECC_SRC/.agents/skills" ]; then
-  while IFS= read -r -d '' skill; do
+  while IFS= read -r skill; do
     copy_entry "$skill" "$ROOT/.agents/skills/$(basename "$skill")"
-  done < <(find "$ECC_SRC/.agents/skills" -mindepth 1 -maxdepth 1 -print0)
+  done < <(find "$ECC_SRC/.agents/skills" -mindepth 1 -maxdepth 1 -print | sort)
 else
   echo "warning: ECC source has no .agents/skills directory" >&2
 fi
