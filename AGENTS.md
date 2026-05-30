@@ -5,6 +5,8 @@ This is a multi-repository workspace managed by Codex with workspace-local ECC a
 This checkout is also a reusable capability template when `.codex-ecc-template`
 exists. In template mode, do not add business repositories directly at the
 root; create a local instance first with `scripts/bootstrap-workspace-instance.sh`.
+That command defaults to updating the generated instance's `ecc-src` lock and
+syncing the latest workspace-local ECC assets.
 
 ## Workspace Layout
 
@@ -30,6 +32,12 @@ Also read these files when they exist:
 - Prefer minimal, reviewable changes.
 - Keep shared workspace changes at the root; keep product code changes inside the relevant `repos/<name>/` repository.
 - If `.codex-ecc-template` exists, keep the root as the base capability layer and do product work inside a generated instance under `.workspaces/` or another target directory.
+
+## Template Root Operations
+
+- When the user asks from the template root to create a workspace, run `scripts/bootstrap-workspace-instance.sh <name>` unless they explicitly ask to pin the template lock. Use `--no-update-lock` only when the user wants the current pinned ECC input.
+- When the user asks from the template root to update an existing workspace's ECC configuration, run `scripts/sync-workspace-instance.sh <name>`. If the target is unclear, list instances with `scripts/sync-workspace-instance.sh --list` and ask one short question.
+- `scripts/sync-workspace-instance.sh <name>` refreshes the selected `.workspaces/<name>` instance only; it should not add business state to the template root.
 
 ## Multi-Repository Work
 

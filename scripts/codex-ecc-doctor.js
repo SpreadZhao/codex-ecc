@@ -33,9 +33,11 @@ const REQUIRED_EXECUTABLES = [
   'scripts/codex-workspace',
   'scripts/ecc-workspace',
   'scripts/bootstrap-workspace-instance.sh',
+  'scripts/sync-workspace-instance.sh',
   'scripts/sync-ecc.sh',
   'scripts/init-ecc-workspace.sh',
   'scripts/bootstrap-ecc-node-deps.sh',
+  'scripts/import-repo.sh',
   'scripts/install-ecc-git-hooks.sh',
   'scripts/codex-session-adapter.js',
   'scripts/codex-observe-session.js',
@@ -201,6 +203,62 @@ function checkCounts() {
   }
 }
 
+function collectSkillFiles(relativePath) {
+  const dir = path.join(ROOT, relativePath);
+  if (!fs.existsSync(dir)) return [];
+
+  const result = [];
+  const stack = [dir];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const fullPath = path.join(current, entry.name);
+      if (entry.isDirectory()) stack.push(fullPath);
+      else if (entry.isFile() && entry.name === 'SKILL.md') result.push(fullPath);
+    }
+  }
+  return result.sort();
+}
+
+function unquoteYamlScalar(value) {
+  const trimmed = String(value || '').trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"'))
+    || (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
+function checkSkillFrontmatter() {
+  const files = collectSkillFiles('.agents/skills');
+  const invalid = [];
+
+  for (const filePath of files) {
+    const raw = fs.readFileSync(filePath, 'utf8');
+    const frontmatter = raw.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+    if (!frontmatter) {
+      invalid.push(`${rel(filePath)}: missing frontmatter`);
+      continue;
+    }
+
+    const description = frontmatter[1].match(/^description:\s*(.*)$/m);
+    if (!description) {
+      invalid.push(`${rel(filePath)}: missing description`);
+      continue;
+    }
+
+    const value = unquoteYamlScalar(description[1]);
+    if (value.length > 1024) {
+      invalid.push(`${rel(filePath)}: description length ${value.length}`);
+    }
+  }
+
+  if (invalid.length === 0) ok(`workspace skill frontmatter valid for ${files.length} skill(s)`);
+  else fail(`workspace skill frontmatter invalid: ${invalid.slice(0, 8).join('; ')}`);
+}
+
 function checkCodexNativeHooks() {
   const hooksPath = '.codex/hooks.json';
   if (!exists(hooksPath)) {
@@ -342,6 +400,7 @@ function main() {
   for (const file of REQUIRED_EXECUTABLES) checkExecutable(file);
   checkCodexConfig();
   checkCounts();
+  checkSkillFrontmatter();
   checkCodexNativeHooks();
   checkGitIgnore();
   checkTemplateBoundary();

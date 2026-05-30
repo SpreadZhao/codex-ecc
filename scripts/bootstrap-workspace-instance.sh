@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 usage() {
   cat <<'EOF'
-Usage: scripts/bootstrap-workspace-instance.sh [--sync] [--update-lock] <name|target-dir>
+Usage: scripts/bootstrap-workspace-instance.sh [--no-sync] [--no-update-lock] <name|target-dir>
 
 Create a local business workspace instance from this reusable Codex ECC
 template. A simple name is created under .workspaces/<name>, which is ignored
@@ -13,15 +13,20 @@ by the template repository. The generated instance is its own Git repository
 and can track repos.yaml, child repository routing, and local workspace state
 without dirtying the template.
 
+By default this creates the instance, updates the instance ecc-src flake lock,
+and syncs the latest ECC assets into the instance.
+
 Options:
-  --sync         run scripts/sync-ecc.sh --force in the generated instance
-  --update-lock when used with --sync, also update the instance ecc-src lock
-  -h, --help    show this help
+  --no-sync        create the instance without running scripts/sync-ecc.sh
+  --no-update-lock sync using the template-pinned ECC lock instead of latest
+  --sync           accepted for backwards compatibility; sync is now default
+  --update-lock    accepted for backwards compatibility; update is now default
+  -h, --help       show this help
 EOF
 }
 
-SYNC=0
-UPDATE_LOCK=0
+SYNC=1
+UPDATE_LOCK=1
 TARGET_ARG=""
 
 while [ "$#" -gt 0 ]; do
@@ -29,8 +34,14 @@ while [ "$#" -gt 0 ]; do
     --sync)
       SYNC=1
       ;;
+    --no-sync)
+      SYNC=0
+      ;;
     --update-lock)
       UPDATE_LOCK=1
+      ;;
+    --no-update-lock)
+      UPDATE_LOCK=0
       ;;
     -h|--help)
       usage
@@ -105,14 +116,10 @@ if [ "$SYNC" -eq 1 ]; then
     SYNC_ARGS=(--update-lock "${SYNC_ARGS[@]}")
   fi
 
-  if command -v direnv >/dev/null 2>&1; then
-    direnv exec "$INSTANCE_ROOT" "$INSTANCE_ROOT/scripts/sync-ecc.sh" "${SYNC_ARGS[@]}"
-  else
-    (
-      cd "$INSTANCE_ROOT"
-      "$INSTANCE_ROOT/scripts/sync-ecc.sh" "${SYNC_ARGS[@]}"
-    )
-  fi
+  (
+    cd "$INSTANCE_ROOT"
+    "$INSTANCE_ROOT/scripts/sync-ecc.sh" "${SYNC_ARGS[@]}"
+  )
 fi
 
 cat <<EOF
@@ -122,7 +129,6 @@ Created Codex ECC workspace instance:
 Next:
   cd "$INSTANCE_ROOT"
   direnv allow
-  scripts/sync-ecc.sh --force
-  scripts/add-repo.sh <git-url> [name]
+  scripts/import-repo.sh <git-url-or-local-repo-path>
   codex
 EOF

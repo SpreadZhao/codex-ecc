@@ -206,6 +206,75 @@ generate_codex_native_hooks() {
   fi
 }
 
+sanitize_codex_skill_frontmatter() {
+  node - "$ROOT/.agents/skills" <<'NODE'
+'use strict';
+
+const fs = require('fs');
+const path = require('path');
+
+const skillsRoot = process.argv[2];
+const MAX_DESCRIPTION_CHARS = 1024;
+
+function walk(dir) {
+  if (!fs.existsSync(dir)) return [];
+  const result = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) result.push(...walk(fullPath));
+    else if (entry.isFile() && entry.name === 'SKILL.md') result.push(fullPath);
+  }
+  return result;
+}
+
+function unquote(value) {
+  const trimmed = String(value || '').trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"'))
+    || (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
+function truncateDescription(value) {
+  const normalized = String(value || '').replace(/\s+/g, ' ').trim();
+  if (normalized.length <= MAX_DESCRIPTION_CHARS) return normalized;
+  return `${normalized.slice(0, MAX_DESCRIPTION_CHARS - 3).replace(/\s+\S*$/, '').trimEnd()}...`;
+}
+
+let changed = 0;
+for (const filePath of walk(skillsRoot)) {
+  const original = fs.readFileSync(filePath, 'utf8');
+  const frontmatter = original.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!frontmatter) continue;
+
+  const lines = frontmatter[1].split('\n');
+  const nextLines = lines.map((line) => {
+    const match = line.match(/^description:\s*(.*)$/);
+    if (!match) return line;
+
+    const description = unquote(match[1]);
+    if (description.length <= MAX_DESCRIPTION_CHARS) return line;
+
+    return `description: ${JSON.stringify(truncateDescription(description))}`;
+  });
+
+  const nextFrontmatter = nextLines.join('\n');
+  if (nextFrontmatter === frontmatter[1]) continue;
+
+  const next = `---\n${nextFrontmatter}\n---${original.slice(frontmatter[0].length)}`;
+  fs.writeFileSync(filePath, next);
+  changed += 1;
+}
+
+if (changed > 0) {
+  console.log(`sanitized: ${changed} Codex skill description(s)`);
+}
+NODE
+}
+
 sync_full_ecc_runtime() {
   local runtime="$ROOT/.ecc/source"
 
@@ -252,6 +321,7 @@ else
 fi
 
 generate_codex_native_hooks
+sanitize_codex_skill_frontmatter
 
 if [ ! -f "$ROOT/repos.yaml" ]; then
   printf 'repositories: {}\n' > "$ROOT/repos.yaml"

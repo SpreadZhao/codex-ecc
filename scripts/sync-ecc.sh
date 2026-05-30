@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ORIGINAL_ARGS=("$@")
 FORCE=0
 UPDATE_LOCK=0
 PRUNE=0
@@ -40,8 +41,9 @@ if [ ! -f "$ROOT/flake.nix" ]; then
   exit 1
 fi
 
-if [ "$UPDATE_LOCK" -eq 1 ]; then
+if [ "$UPDATE_LOCK" -eq 1 ] && [ "${CODEX_ECC_SYNC_LOCK_UPDATED:-0}" != "1" ]; then
   nix flake update ecc-src
+  export CODEX_ECC_SYNC_LOCK_UPDATED=1
 fi
 
 if [ "$PRUNE" -eq 1 ]; then
@@ -50,14 +52,24 @@ fi
 
 mkdir -p "$ROOT/.codex" "$ROOT/.agents/skills" "$ROOT/.ecc"
 
-if command -v direnv >/dev/null 2>&1; then
-  ECC_PATH="$(direnv exec "$ROOT" printenv ECC_SRC)"
-else
-  ECC_PATH="${ECC_SRC:-}"
+ECC_PATH=""
+if [ -n "${ECC_SRC:-}" ] && [ -d "$ECC_SRC" ]; then
+  ECC_PATH="$ECC_SRC"
+elif command -v direnv >/dev/null 2>&1; then
+  ECC_PATH="$(direnv exec "$ROOT" printenv ECC_SRC 2>/dev/null || true)"
+fi
+
+if { [ -z "$ECC_PATH" ] || [ ! -d "$ECC_PATH" ]; } \
+  && command -v nix >/dev/null 2>&1 \
+  && [ "${CODEX_ECC_SYNC_NIX_DEVELOP:-0}" != "1" ]; then
+  exec env \
+    CODEX_ECC_SYNC_NIX_DEVELOP=1 \
+    CODEX_ECC_SYNC_LOCK_UPDATED="${CODEX_ECC_SYNC_LOCK_UPDATED:-0}" \
+    nix develop "$ROOT" --command "$0" "${ORIGINAL_ARGS[@]}"
 fi
 
 if [ -z "$ECC_PATH" ] || [ ! -d "$ECC_PATH" ]; then
-  echo "Could not resolve ECC_SRC. Run direnv allow or enter the Nix dev shell." >&2
+  echo "Could not resolve ECC_SRC. Run direnv allow, enter the Nix dev shell, or install nix." >&2
   exit 1
 fi
 

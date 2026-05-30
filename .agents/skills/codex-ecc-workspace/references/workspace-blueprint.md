@@ -60,8 +60,10 @@ codex-ecc/
     ├── codex-ecc-doctor.js
     ├── install-ecc-git-hooks.sh
     ├── bootstrap-workspace-instance.sh
+    ├── sync-workspace-instance.sh
     ├── init-ecc-workspace.sh
     ├── add-repo.sh
+    ├── import-repo.sh
     ├── codex-workspace
     └── sync-ecc.sh
 ```
@@ -86,7 +88,7 @@ codex-ecc/
 | `.workspaces/` | Ignored local business workspace instances, each with its own Git repository and `repos.yaml`. |
 | `repos/` | Independent child project repositories. |
 | `repos.yaml` | Registry of child repo path, type, build/test commands, notes. |
-| `scripts/` | Workspace setup, sync, add-repo, and launch helpers. |
+| `scripts/` | Workspace setup, sync, instance refresh, import, add-repo, and launch helpers. |
 
 ## Required Tooling
 
@@ -142,7 +144,11 @@ Both `scripts/codex-workspace` and `scripts/ecc-workspace` should set `NPM_CONFI
 
 `scripts/codex-ecc-doctor.js` should validate the workspace-local Codex/ECC surface: copied config, skills, prompts, git hooks, wrappers, flake entries, and project-local Codex config sanitation. It must not read or write `~/.codex`. `scripts/install-ecc-git-hooks.sh <repo>` should install `.codex/git-hooks/pre-commit` and `.codex/git-hooks/pre-push` into exactly one Git repository's `.git/hooks/` directory; it must not set global `core.hooksPath`.
 
-For a pushable template checkout, add `.codex-ecc-template` and keep `repos.yaml` empty. `scripts/add-repo.sh` should refuse to add repositories in this mode unless `CODEX_ECC_ALLOW_TEMPLATE_REPOS=1` is set. `scripts/bootstrap-workspace-instance.sh <name>` should generate `.workspaces/<name>` by invoking the skill's `create-workspace.sh`, remove the template marker from the generated instance, and leave the instance as an independent Git repository. Work inside that instance for product repos and local routing state.
+For a pushable template checkout, add `.codex-ecc-template` and keep `repos.yaml` empty. `scripts/add-repo.sh` should refuse to add repositories in this mode unless `CODEX_ECC_ALLOW_TEMPLATE_REPOS=1` is set. `scripts/bootstrap-workspace-instance.sh <name>` should generate `.workspaces/<name>` by invoking the skill's `create-workspace.sh`, remove the template marker from the generated instance, update the instance's `ecc-src` lock and sync latest ECC assets by default, and leave the instance as an independent Git repository. Work inside that instance for product repos and local routing state.
+
+From the template root, `scripts/sync-workspace-instance.sh <name>` should refresh only the selected `.workspaces/<name>` instance. By default it should run that instance's `scripts/sync-ecc.sh --update-lock --force`, then run the instance doctor when available. It should support `--list` so Codex can ask the user to choose an instance when the target is unclear.
+
+`scripts/import-repo.sh` is the preferred repository onboarding entrypoint. It should accept either a Git URL or a local Git repository path. From an instance root, it imports into the current instance. From a template root, it should require `--instance <name>` or `--new-instance <name>` and support `--list-instances` so Codex can ask the user where to place the repository before mutating anything.
 
 ## Sync Semantics
 
@@ -163,6 +169,16 @@ This updates the `ecc-src` lock and copies upstream ECC assets into:
 - `.ecc/source/`
 
 When refreshing inside an instance, run the same command from the instance root. It updates that instance's copied ECC assets and does not dirty the template repository above `.workspaces/`.
+
+When refreshing an instance from the template root, use:
+
+```bash
+scripts/sync-workspace-instance.sh <name>
+```
+
+This is the root-level orchestration path for "update this workspace's ECC configuration".
+
+After copying skills into `.agents/skills/`, sanitize Codex skill frontmatter for the current Codex loader. At minimum, ensure each `SKILL.md` has YAML frontmatter and keep `description` at or below 1024 characters. Keep `.ecc/source/` as the upstream mirror; apply compatibility edits only to the workspace-local `.agents/skills/` copy.
 
 After copying, sanitize `.codex/config.toml` for project-local use. In
 particular, remove `notify` and `[profiles.*]`; current Codex warns that those
@@ -202,7 +218,7 @@ node --check scripts/codex-replay-ecc-hooks.js
 node --check scripts/codex-native-hook-adapter.js
 node --check scripts/generate-codex-native-hooks.js
 node --check scripts/codex-ecc-doctor.js
-bash -n scripts/init-ecc-workspace.sh scripts/add-repo.sh scripts/codex-workspace scripts/ecc-workspace scripts/sync-ecc.sh scripts/install-ecc-git-hooks.sh
+bash -n scripts/init-ecc-workspace.sh scripts/add-repo.sh scripts/import-repo.sh scripts/codex-workspace scripts/ecc-workspace scripts/sync-ecc.sh scripts/sync-workspace-instance.sh scripts/install-ecc-git-hooks.sh
 bash -n scripts/bootstrap-workspace-instance.sh
 scripts/codex-ecc-doctor.js
 git status --short

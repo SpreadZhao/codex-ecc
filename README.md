@@ -8,28 +8,52 @@ Codex itself is expected to be installed globally. The Nix flake provides the wo
 
 This repository is intended to be pushable and reusable as a base capability layer. The marker `.codex-ecc-template` means: keep this root focused on Codex/ECC scaffolding, scripts, Nix packaging, hooks, and skills.
 
+After cloning this template, start Codex at the root and ask it to create or
+update a workspace. Codex should use the root scripts below rather than adding
+business repositories directly to the template.
+
+Codex-only flow:
+
+```bash
+codex
+```
+
+Then ask Codex: `帮我新增 android workspace` or `帮我更新 android workspace 的 ECC 配置`.
+
 Create a local business workspace instance before adding application repositories:
 
 ```bash
 scripts/bootstrap-workspace-instance.sh my-apps
 cd .workspaces/my-apps
 direnv allow
-scripts/sync-ecc.sh --force
-scripts/add-repo.sh git@github.com:you/repo-a.git
+scripts/import-repo.sh git@github.com:you/repo-a.git
 codex
 ```
 
-The generated instance is an independent Git repository under `.workspaces/`, which is ignored by this template. It can track `repos.yaml`, local routing decisions, and child repository state without dirtying the reusable template repo. Inside the instance, `$codex-ecc-workspace` still works the same way: refresh ECC with `scripts/sync-ecc.sh --update-lock --force`.
+`scripts/bootstrap-workspace-instance.sh` updates the generated instance's
+`ecc-src` lock and syncs latest ECC assets by default. The generated instance is
+an independent Git repository under `.workspaces/`, which is ignored by this
+template. It can track `repos.yaml`, local routing decisions, and child
+repository state without dirtying the reusable template repo.
+
+From the template root, update one existing instance's ECC configuration:
+
+```bash
+scripts/sync-workspace-instance.sh --list
+scripts/sync-workspace-instance.sh my-apps
+```
+
+Inside the instance, `$codex-ecc-workspace` still works the same way: refresh
+ECC with `scripts/sync-ecc.sh --update-lock --force`.
 
 ## Quick Start
 
 ```bash
 direnv allow
-./scripts/sync-ecc.sh --force
 ./scripts/bootstrap-workspace-instance.sh my-apps
 cd .workspaces/my-apps
 direnv allow
-./scripts/add-repo.sh git@github.com:you/repo-a.git
+./scripts/import-repo.sh git@github.com:you/repo-a.git
 codex
 ```
 
@@ -97,6 +121,27 @@ scripts/install-ecc-git-hooks.sh repos/example-project
 ```
 
 This copies from `.codex/git-hooks/` into that repository's `.git/hooks/` only. It does not set global `core.hooksPath`.
+
+To add a repository to a workspace instance, prefer `scripts/import-repo.sh`. It accepts either a Git URL or a local Git repository path:
+
+```bash
+scripts/import-repo.sh git@github.com:you/project.git
+scripts/import-repo.sh ~/workspaces/ExistingProject --repo-name ExistingProject
+```
+
+When running from the template root, choose the target instance explicitly:
+
+```bash
+scripts/import-repo.sh --list-instances
+scripts/import-repo.sh --instance my-apps git@github.com:you/project.git
+scripts/import-repo.sh --new-instance android ~/workspaces/HowMuch
+```
+
+To refresh an existing instance from the template root:
+
+```bash
+scripts/sync-workspace-instance.sh my-apps
+```
 
 ## Nix Flake
 

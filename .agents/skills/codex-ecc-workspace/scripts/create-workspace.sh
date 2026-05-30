@@ -44,7 +44,9 @@ seed_from_source_workspace() {
     "scripts/init-ecc-workspace.sh:0755" \
     "scripts/sync-ecc.sh:0755" \
     "scripts/add-repo.sh:0755" \
+    "scripts/import-repo.sh:0755" \
     "scripts/bootstrap-workspace-instance.sh:0755" \
+    "scripts/sync-workspace-instance.sh:0755" \
     "scripts/codex-workspace:0755" \
     "scripts/ecc-workspace:0755" \
     "scripts/bootstrap-ecc-node-deps.sh:0755" \
@@ -510,6 +512,14 @@ if [ ! -e "$ROOT/scripts/sync-ecc.sh" ]; then
   echo "created: scripts/sync-ecc.sh"
 else
   echo "skip existing: scripts/sync-ecc.sh"
+fi
+
+if [ ! -e "$ROOT/scripts/sync-workspace-instance.sh" ] && [ -f "$SCRIPT_DIR/sync-workspace-instance.sh" ]; then
+  cp "$SCRIPT_DIR/sync-workspace-instance.sh" "$ROOT/scripts/sync-workspace-instance.sh"
+  chmod +x "$ROOT/scripts/sync-workspace-instance.sh"
+  echo "created: scripts/sync-workspace-instance.sh"
+else
+  echo "skip existing: scripts/sync-workspace-instance.sh"
 fi
 
 if [ ! -d "$ROOT/.git" ]; then

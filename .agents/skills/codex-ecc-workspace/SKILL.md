@@ -1,6 +1,6 @@
 ---
 name: codex-ecc-workspace
-description: Create, inspect, or refresh a NixOS Codex + ECC multi-repository workspace with workspace-local ECC assets. Use when Codex needs to bootstrap a repo like codex-ecc, add the flake/direnv/Codex scaffolding, keep projects under repos/, copy ECC .codex and .agents/skills assets without touching ~/.codex, or update the workspace to the latest pinned ECC configuration.
+description: Create, inspect, or refresh a NixOS Codex + ECC multi-repository workspace with workspace-local ECC assets. Use when Codex needs to bootstrap a repo like codex-ecc, add flake/direnv/Codex scaffolding, keep projects under repos/, copy ECC .codex and .agents/skills assets without touching ~/.codex, or update a workspace/instance to the latest ECC configuration.
 ---
 
 # Codex ECC Workspace
@@ -22,10 +22,18 @@ Treat ECC as workspace-local configuration, not as a global Codex installer.
 ## Task Router
 
 - **Create a new workspace**: use `scripts/create-workspace.sh <target-dir>` from this skill, then run `direnv allow` in the new workspace and `scripts/sync-ecc.sh --force`.
-- **Create a local business instance from a reusable template**: run `scripts/bootstrap-workspace-instance.sh <name>` from the template repo, then work inside `.workspaces/<name>`.
-- **Refresh ECC assets in an existing workspace**: run `scripts/sync-ecc.sh --update-lock --force` from the workspace root. This syncs the full ECC runtime, all upstream skills, and generated Codex prompts.
+- **Create a local business instance from a reusable template**: run `scripts/bootstrap-workspace-instance.sh <name>` from the template repo. By default this updates the generated instance's `ecc-src` lock and syncs latest ECC assets, then product work happens inside `.workspaces/<name>`.
+- **Refresh ECC assets in an existing workspace**: run `scripts/sync-ecc.sh --update-lock --force` from that workspace root. This syncs the full ECC runtime, all upstream skills, and generated Codex prompts.
+- **Refresh one local business instance from the template root**: run `scripts/sync-workspace-instance.sh <name>`. If the target instance is unclear, list `scripts/sync-workspace-instance.sh --list` and ask one short question.
 - **Explain or audit the architecture**: read `references/workspace-blueprint.md`, then inspect the current workspace files.
-- **Add project repositories**: use the workspace's `scripts/add-repo.sh`, then update `repos.yaml` with type, build, test, and notes.
+- **Add project repositories**: prefer `scripts/import-repo.sh`, which accepts a Git URL or local Git repository path, creates or targets a workspace instance, writes `AGENTS.workspace.md`, and updates the instance `repos.yaml`.
+
+When the user asks to "add/import this repository" and does not specify the target instance:
+
+1. If running from a template checkout, list existing instances with `scripts/import-repo.sh --list-instances`.
+2. Ask one short question: choose an existing `.workspaces/<name>` instance or provide a new instance name.
+3. Use `scripts/import-repo.sh --instance <name> <source>` for an existing instance or `scripts/import-repo.sh --new-instance <name> <source>` for a new one.
+4. If running from an instance checkout, import into the current instance unless the user explicitly names another one.
 
 Read `references/workspace-blueprint.md` when you need exact file responsibilities, safety rules, or the expected directory structure.
 
@@ -55,7 +63,7 @@ Read `references/workspace-blueprint.md` when you need exact file responsibiliti
 
    ```bash
    nix flake check --no-build
-   bash -n scripts/init-ecc-workspace.sh scripts/add-repo.sh scripts/codex-workspace scripts/ecc-workspace scripts/sync-ecc.sh
+   bash -n scripts/init-ecc-workspace.sh scripts/add-repo.sh scripts/import-repo.sh scripts/codex-workspace scripts/ecc-workspace scripts/sync-ecc.sh scripts/sync-workspace-instance.sh
    node --check scripts/codex-session-adapter.js
    node --check scripts/codex-observe-session.js
    node --check scripts/codex-session-metrics.js
@@ -80,6 +88,14 @@ nix flake check --no-build
 
 If strict mirroring is required, pass `--prune` so local `.codex`, `.agents/skills`, and `AGENTS.ecc.md` are replaced from the current ECC source. Use this only when local custom skills do not live under `.agents/skills` or when they are intentionally backed up elsewhere.
 
+From a reusable template root, refresh one generated business instance:
+
+```bash
+scripts/sync-workspace-instance.sh <name>
+```
+
+This updates and syncs only the selected `.workspaces/<name>` instance. It does not mutate template-root business state.
+
 ## Validation Checklist
 
 - `flake.nix` declares `ecc-src = github:affaan-m/ECC` with `flake = false`.
@@ -88,7 +104,10 @@ If strict mirroring is required, pass `--prune` so local `.codex`, `.agents/skil
 - Root `AGENTS.md` defines multi-repo boundaries and says not to modify `~/.codex`.
 - Pushable template repos may contain `.codex-ecc-template`; in that mode `scripts/add-repo.sh` must refuse product repositories unless `CODEX_ECC_ALLOW_TEMPLATE_REPOS=1` is explicitly set.
 - `scripts/bootstrap-workspace-instance.sh <name>` creates an ignored independent instance under `.workspaces/<name>` with its own Git repository and refresh scripts.
+- `scripts/sync-workspace-instance.sh <name>` can be run from the template root to update one existing `.workspaces/<name>` instance to the latest ECC configuration by default.
+- `scripts/import-repo.sh` can import GitHub/Git URLs and local Git repositories into an existing or newly created instance.
 - `AGENTS.ecc.md`, `.codex/AGENTS.md`, `.codex/config.toml`, `.codex/agents/`, `.codex/prompts/`, `.agents/skills/`, and `.ecc/source/` exist after sync.
+- Synced workspace-local skills must have Codex-compatible YAML frontmatter; in particular `description` must stay at or below Codex's 1024-character limit even when the upstream ECC skill is longer.
 - `.codex/hooks.json` exists after sync and routes native Codex SessionStart / PreToolUse / PostToolUse / PreCompact / Stop events through `scripts/codex-native-hook-adapter.js`.
 - `.codex/git-hooks/pre-commit` and `.codex/git-hooks/pre-push` exist after sync, and `scripts/install-ecc-git-hooks.sh <repo>` can install them into one local Git repository without changing global `core.hooksPath`.
 - `scripts/bin/codex` and `scripts/bin/ecc` exist and route through workspace-local wrappers.
