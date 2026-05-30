@@ -20,6 +20,21 @@ codex
 
 Then ask Codex: `帮我新增 android workspace` or `帮我更新 android workspace 的 ECC 配置`.
 
+Things you can ask Codex from the template root:
+
+- "Create a new workspace named `android`." Codex should run `scripts/bootstrap-workspace-instance.sh android`, which creates `.workspaces/android` and syncs the latest ECC assets by default.
+- "Create a new workspace named `android` using the currently pinned ECC lock." Codex should run `scripts/bootstrap-workspace-instance.sh --no-update-lock android`.
+- "List my local workspaces." Codex should run `scripts/sync-workspace-instance.sh --list` or `scripts/import-repo.sh --list-instances`.
+- "Update the `android` workspace ECC configuration." Codex should run `scripts/sync-workspace-instance.sh android`.
+- "Update this template root to the latest ECC configuration." Codex should run `scripts/sync-ecc.sh --update-lock --force` from the template root.
+- "Add this GitHub repository to the `android` workspace: `<git-url>`." Codex should run `scripts/import-repo.sh --instance android <git-url>`.
+- "Copy this local Git repository into the `android` workspace: `<path>`." Codex should run `scripts/import-repo.sh --instance android <path>`.
+- "Create a new workspace named `android` and add this repository: `<git-url-or-path>`." Codex should run `scripts/import-repo.sh --new-instance android <git-url-or-path>`.
+- "Tell me where I should start Codex for this project." Codex should explain that template-level operations start here, while application development starts inside `.workspaces/<name>`.
+- "Inspect the workspace architecture." Codex should read `AGENTS.md`, this README, `repos.yaml`, and the `codex-ecc-workspace` skill documents.
+- "Run the ECC workspace health check." Codex should run `scripts/codex-ecc-doctor.js`.
+- "Show me what changed after a refresh." Codex should inspect `git diff` in the template root or in the selected `.workspaces/<name>` instance, depending on the target.
+
 Create a local business workspace instance before adding application repositories:
 
 ```bash
