@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+
+ECC_RUNTIME="${CODEX_ECC_RUNTIME:-$ROOT/.ecc/source}"
+if [ ! -d "$ECC_RUNTIME" ]; then
+  ECC_RUNTIME="${ECC_SRC:-}"
+fi
+
+if [ -z "$ECC_RUNTIME" ] || [ ! -d "$ECC_RUNTIME" ]; then
+  echo "Could not find ECC runtime. Run scripts/sync-ecc.sh --force after entering the Nix dev shell." >&2
+  exit 1
+fi
+
+export CODEX_ECC_RUNTIME="$ECC_RUNTIME"
+export CLAUDE_PLUGIN_ROOT="$ECC_RUNTIME"
+export ECC_PLUGIN_ROOT="$ECC_RUNTIME"
+export CODEX_ECC_HOME="${CODEX_ECC_HOME:-$ROOT/.ecc/home}"
+export HOME="$CODEX_ECC_HOME"
+export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$CODEX_ECC_HOME/.config}"
+export XDG_DATA_HOME="${XDG_DATA_HOME:-$CODEX_ECC_HOME/.local/share}"
+export CODEX_HOME="${CODEX_HOME:-$ROOT/.ecc/codex-home}"
+export AGENTS_HOME="${AGENTS_HOME:-$ROOT/.agents}"
+export CLV2_HOMUNCULUS_DIR="${CLV2_HOMUNCULUS_DIR:-$ROOT/.ecc/state/ecc-homunculus}"
+export ECC_STATE_DIR="${ECC_STATE_DIR:-$ROOT/.ecc/state}"
+export ECC_GLOBAL_HOOKS_DIR="${ECC_GLOBAL_HOOKS_DIR:-$ROOT/.codex/git-hooks}"
+export NPM_CONFIG_PREFIX="${NPM_CONFIG_PREFIX:-$ROOT/.npm-global}"
+export NPM_CONFIG_CACHE="${NPM_CONFIG_CACHE:-$ROOT/.npm-cache}"
+export npm_config_prefix="$NPM_CONFIG_PREFIX"
+export npm_config_cache="$NPM_CONFIG_CACHE"
+
+mkdir -p "$ROOT/.codex" "$ROOT/.agents" "$ECC_STATE_DIR" "$CODEX_HOME" "$CODEX_ECC_HOME" "$NPM_CONFIG_PREFIX/bin" "$NPM_CONFIG_CACHE"
+
+if [ ! -d "$ECC_RUNTIME/node_modules/ajv" ]; then
+  if [ "${CODEX_ECC_AUTO_NPM_INSTALL:-1}" = "1" ]; then
+    "$ROOT/scripts/bootstrap-ecc-node-deps.sh"
+  else
+    echo "ECC runtime dependencies are missing under $ECC_RUNTIME/node_modules." >&2
+    echo "Run scripts/bootstrap-ecc-node-deps.sh or set CODEX_ECC_AUTO_NPM_INSTALL=1." >&2
+    exit 1
+  fi
+fi
+
+exec node "$ECC_RUNTIME/scripts/ecc.js" "$@"

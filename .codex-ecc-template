@@ -1,0 +1,4 @@
+This repository is the reusable Codex ECC capability template.
+
+Use scripts/bootstrap-workspace-instance.sh to create local business workspaces
+that are not committed to this template repository.

@@ -1,0 +1,137 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+
+find_real_codex() {
+  local shim="$ROOT/scripts/bin/codex"
+  local shim_real
+  shim_real="$(readlink -f "$shim" 2>/dev/null || printf '%s\n' "$shim")"
+
+  local dir candidate candidate_real
+  local old_ifs="$IFS"
+  IFS=:
+  for dir in $PATH; do
+    IFS="$old_ifs"
+    [ -n "$dir" ] || dir=.
+    candidate="$dir/codex"
+    if [ -x "$candidate" ]; then
+      candidate_real="$(readlink -f "$candidate" 2>/dev/null || printf '%s\n' "$candidate")"
+      if [ "$candidate_real" != "$shim_real" ]; then
+        printf '%s\n' "$candidate"
+        return 0
+      fi
+    fi
+    IFS=:
+  done
+  IFS="$old_ifs"
+  return 1
+}
+
+REAL_CODEX="$(find_real_codex || true)"
+if [ -z "$REAL_CODEX" ]; then
+  echo "codex command not found. Codex is expected to be installed globally." >&2
+  exit 1
+fi
+
+if [ "${CODEX_ECC_LOCAL_CODEX_HOME:-0}" = "1" ]; then
+  export CODEX_HOME="$ROOT/.ecc/codex-home"
+  mkdir -p "$CODEX_HOME"
+fi
+
+ECC_RUNTIME="${CODEX_ECC_RUNTIME:-$ROOT/.ecc/source}"
+if [ ! -d "$ECC_RUNTIME" ]; then
+  ECC_RUNTIME="${ECC_SRC:-}"
+fi
+
+if [ -n "$ECC_RUNTIME" ] && [ -d "$ECC_RUNTIME" ]; then
+  export CODEX_ECC_RUNTIME="$ECC_RUNTIME"
+  export CLAUDE_PLUGIN_ROOT="$ECC_RUNTIME"
+  export ECC_PLUGIN_ROOT="$ECC_RUNTIME"
+fi
+
+export AGENTS_HOME="${AGENTS_HOME:-$ROOT/.agents}"
+export CLV2_HOMUNCULUS_DIR="${CLV2_HOMUNCULUS_DIR:-$ROOT/.ecc/state/ecc-homunculus}"
+export ECC_STATE_DIR="${ECC_STATE_DIR:-$ROOT/.ecc/state}"
+export ECC_GLOBAL_HOOKS_DIR="${ECC_GLOBAL_HOOKS_DIR:-$ROOT/.codex/git-hooks}"
+export NPM_CONFIG_PREFIX="${NPM_CONFIG_PREFIX:-$ROOT/.npm-global}"
+export NPM_CONFIG_CACHE="${NPM_CONFIG_CACHE:-$ROOT/.npm-cache}"
+export npm_config_prefix="$NPM_CONFIG_PREFIX"
+export npm_config_cache="$NPM_CONFIG_CACHE"
+export PATH="$ROOT/scripts/bin:$NPM_CONFIG_PREFIX/bin:$PATH"
+
+mkdir -p "$ECC_STATE_DIR/lifecycle" "$ECC_STATE_DIR/transcripts" "$NPM_CONFIG_PREFIX/bin" "$NPM_CONFIG_CACHE"
+
+SESSION_ID="${ECC_SESSION_ID:-codex-$(date +%Y%m%d-%H%M%S)-$$}"
+export ECC_SESSION_ID="$SESSION_ID"
+export CLAUDE_SESSION_ID="${CLAUDE_SESSION_ID:-$SESSION_ID}"
+
+SESSION_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
+START_MARKER="$ECC_STATE_DIR/lifecycle/$SESSION_ID.start"
+LIFECYCLE_LOG="$ECC_STATE_DIR/lifecycle/codex-lifecycle.log"
+touch "$START_MARKER"
+
+PROCESS_TRANSCRIPTS=1
+if [ -n "${CODEX_THREAD_ID:-}" ] && [ "${CODEX_ECC_ALLOW_NESTED_TRANSCRIPT:-0}" != "1" ]; then
+  PROCESS_TRANSCRIPTS=0
+fi
+
+run_ecc_hook() {
+  local hook_script="$1"
+  local payload="$2"
+
+  if [ -n "$ECC_RUNTIME" ] && [ -f "$ECC_RUNTIME/$hook_script" ]; then
+    printf '%s\n' "$payload" | HOME="$ROOT/.ecc/home" node "$ECC_RUNTIME/$hook_script" >>"$LIFECYCLE_LOG" 2>&1 || true
+  fi
+}
+
+START_PAYLOAD="$(node -e 'process.stdout.write(JSON.stringify({hook_event_name:"SessionStart",source:"startup",session_id:process.argv[1],cwd:process.argv[2]}))' "$SESSION_ID" "$ROOT")"
+run_ecc_hook "scripts/hooks/session-start.js" "$START_PAYLOAD"
+
+CODEX_ARGS=()
+if [ "${CODEX_ECC_BYPASS_HOOK_TRUST:-0}" = "1" ]; then
+  CODEX_ARGS+=(--dangerously-bypass-hook-trust)
+fi
+
+"$REAL_CODEX" "${CODEX_ARGS[@]}" --cd "$ROOT" "$@"
+STATUS=$?
+
+TRANSCRIPT_PATH=""
+CODEX_SESSIONS_DIR="${CODEX_HOME:-$HOME/.codex}/sessions"
+if [ "$PROCESS_TRANSCRIPTS" = "0" ]; then
+  echo "[codex-workspace] Skipping transcript post-processing inside existing Codex thread $CODEX_THREAD_ID" >>"$LIFECYCLE_LOG"
+elif [ -d "$CODEX_SESSIONS_DIR" ]; then
+  TRANSCRIPT_PATH="$(find "$CODEX_SESSIONS_DIR" -type f -name 'rollout-*.jsonl' -newer "$START_MARKER" -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1 | cut -d' ' -f2- || true)"
+fi
+
+HOOK_TRANSCRIPT="$TRANSCRIPT_PATH"
+if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$ROOT/scripts/codex-session-adapter.js" ]; then
+  ADAPTED_TRANSCRIPT="$ECC_STATE_DIR/transcripts/$SESSION_ID.claude.jsonl"
+  if node "$ROOT/scripts/codex-session-adapter.js" "$TRANSCRIPT_PATH" "$ADAPTED_TRANSCRIPT" >>"$LIFECYCLE_LOG" 2>&1; then
+    HOOK_TRANSCRIPT="$ADAPTED_TRANSCRIPT"
+  fi
+fi
+
+if [ "${CODEX_ECC_OBSERVE:-1}" = "1" ] && [ -n "$TRANSCRIPT_PATH" ] && [ -f "$ROOT/scripts/codex-observe-session.js" ]; then
+  node "$ROOT/scripts/codex-observe-session.js" "$TRANSCRIPT_PATH" >>"$LIFECYCLE_LOG" 2>&1 || true
+fi
+
+if [ "${CODEX_ECC_METRICS:-1}" = "1" ] && [ -n "$TRANSCRIPT_PATH" ] && [ -f "$ROOT/scripts/codex-session-metrics.js" ]; then
+  node "$ROOT/scripts/codex-session-metrics.js" "$TRANSCRIPT_PATH" --home-dir "$ROOT/.ecc/home" >>"$LIFECYCLE_LOG" 2>&1 || true
+fi
+
+END_PAYLOAD="$(node -e 'process.stdout.write(JSON.stringify({hook_event_name:"SessionEnd",session_id:process.argv[1],transcript_path:process.argv[2] || "",cwd:process.argv[3]}))' "$SESSION_ID" "$HOOK_TRANSCRIPT" "$ROOT")"
+if [ "${CODEX_ECC_HOOK_REPLAY:-1}" = "1" ] && [ -n "$TRANSCRIPT_PATH" ] && [ -f "$ROOT/scripts/codex-replay-ecc-hooks.js" ]; then
+  if ! node "$ROOT/scripts/codex-replay-ecc-hooks.js" "$TRANSCRIPT_PATH" \
+    --claude-transcript "$HOOK_TRANSCRIPT" \
+    --home-dir "$ROOT/.ecc/home" \
+    --session-id "$SESSION_ID" \
+    --since "$SESSION_STARTED_AT" >>"$LIFECYCLE_LOG" 2>&1; then
+    run_ecc_hook "scripts/hooks/session-end-marker.js" "$END_PAYLOAD"
+  fi
+else
+  run_ecc_hook "scripts/hooks/session-end-marker.js" "$END_PAYLOAD"
+fi
+
+exit "$STATUS"

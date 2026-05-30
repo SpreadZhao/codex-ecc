@@ -1,0 +1,5 @@
+# Workspace repository registry.
+#
+# Add entries manually or with scripts/add-repo.sh. Keep build/test commands
+# accurate so Codex does not guess how to verify a project.
+repositories: {}

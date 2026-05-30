@@ -1,0 +1,295 @@
+{
+  "$schema": "https://developers.openai.com/codex/hooks.schema.json",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/codex-native-hook-adapter.js --event SessionStart --id session:start --target scripts/hooks/session-start.js",
+            "async": false,
+            "timeoutSec": 30,
+            "statusMessage": "Load ECC session context"
+          }
+        ],
+        "description": "Load ECC session context",
+        "id": "session:start"
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/codex-native-hook-adapter.js --event PreToolUse --id pre:bash:dispatcher --tools Bash,Shell,exec_command,unified_exec,local_shell_call,user_shell --target scripts/hooks/pre-bash-dispatcher.js",
+            "async": false,
+            "timeoutSec": 30,
+            "statusMessage": "ECC Bash preflight dispatcher"
+          }
+        ],
+        "description": "ECC Bash preflight dispatcher",
+        "id": "pre:bash:dispatcher"
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/codex-native-hook-adapter.js --event PreToolUse --id pre:write:doc-file-warning --tools Write,Edit,MultiEdit,apply_patch,file_change,custom_tool_call --run-with-flags scripts/hooks/doc-file-warning.js --profiles standard,strict",
+            "async": false,
+            "timeoutSec": 10,
+            "statusMessage": "Warn on ad-hoc documentation writes"
+          }
+        ],
+        "description": "Warn on ad-hoc documentation writes",
+        "id": "pre:write:doc-file-warning"
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/codex-native-hook-adapter.js --event PreToolUse --id pre:edit-write:suggest-compact --tools Write,Edit,MultiEdit,apply_patch,file_change,custom_tool_call --run-with-flags scripts/hooks/suggest-compact.js --profiles standard,strict",
+            "async": false,
+            "timeoutSec": 10,
+            "statusMessage": "Suggest compaction at logical intervals"
+          }
+        ],
+        "description": "Suggest compaction at logical intervals",
+        "id": "pre:edit-write:suggest-compact"
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/codex-native-hook-adapter.js --event PreToolUse --id pre:config-protection --tools Write,Edit,MultiEdit,apply_patch,file_change,custom_tool_call --run-with-flags scripts/hooks/config-protection.js --profiles standard,strict",
+            "async": false,
+            "timeoutSec": 10,
+            "statusMessage": "Block weakening formatter/linter config"
+          }
+        ],
+        "description": "Block weakening formatter/linter config",
+        "id": "pre:config-protection"
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/codex-native-hook-adapter.js --event PreToolUse --id pre:edit-write:gateguard-fact-force --tools Write,Edit,MultiEdit,apply_patch,file_change,custom_tool_call --run-with-flags scripts/hooks/gateguard-fact-force.js --profiles standard,strict",
+            "async": false,
+            "timeoutSec": 10,
+            "statusMessage": "Require investigation before edits"
+          }
+        ],
+        "description": "Require investigation before edits",
+        "id": "pre:edit-write:gateguard-fact-force"
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/codex-native-hook-adapter.js --event PreToolUse --id pre:mcp-health-check --tools MCP,mcp_tool_call --run-with-flags scripts/hooks/mcp-health-check.js --profiles standard,strict",
+            "async": false,
+            "timeoutSec": 10,
+            "statusMessage": "Check MCP health before MCP calls"
+          }
+        ],
+        "description": "Check MCP health before MCP calls",
+        "id": "pre:mcp-health-check"
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/codex-native-hook-adapter.js --event PreCompact --id pre:compact --run-with-flags scripts/hooks/pre-compact.js --profiles standard,strict",
+            "async": false,
+            "timeoutSec": 30,
+            "statusMessage": "Save ECC state before compaction"
+          }
+        ],
+        "description": "Save ECC state before compaction",
+        "id": "pre:compact"
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/codex-native-hook-adapter.js --event PostToolUse --id post:bash:dispatcher --tools Bash,Shell,exec_command,unified_exec,local_shell_call,user_shell --target scripts/hooks/post-bash-dispatcher.js",
+            "async": false,
+            "timeoutSec": 30,
+            "statusMessage": "ECC Bash postflight dispatcher"
+          }
+        ],
+        "description": "ECC Bash postflight dispatcher",
+        "id": "post:bash:dispatcher"
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/codex-native-hook-adapter.js --event PostToolUse --id post:quality-gate --tools Write,Edit,MultiEdit,apply_patch,file_change,custom_tool_call --run-with-flags scripts/hooks/quality-gate.js --profiles standard,strict",
+            "async": false,
+            "timeoutSec": 60,
+            "statusMessage": "Run quality gate checks after edits"
+          }
+        ],
+        "description": "Run quality gate checks after edits",
+        "id": "post:quality-gate"
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/codex-native-hook-adapter.js --event PostToolUse --id post:edit:design-quality-check --tools Write,Edit,MultiEdit,apply_patch,file_change,custom_tool_call --run-with-flags scripts/hooks/design-quality-check.js --profiles standard,strict",
+            "async": false,
+            "timeoutSec": 20,
+            "statusMessage": "Warn about generic frontend UI drift"
+          }
+        ],
+        "description": "Warn about generic frontend UI drift",
+        "id": "post:edit:design-quality-check"
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/codex-native-hook-adapter.js --event PostToolUse --id post:edit:accumulate --tools Write,Edit,MultiEdit,apply_patch,file_change,custom_tool_call --run-with-flags scripts/hooks/post-edit-accumulator.js --profiles standard,strict",
+            "async": false,
+            "timeoutSec": 10,
+            "statusMessage": "Record edited files for stop-time checks"
+          }
+        ],
+        "description": "Record edited files for stop-time checks",
+        "id": "post:edit:accumulate"
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/codex-native-hook-adapter.js --event PostToolUse --id post:edit:console-warn --tools Edit,apply_patch,file_change,custom_tool_call --run-with-flags scripts/hooks/post-edit-console-warn.js --profiles standard,strict",
+            "async": false,
+            "timeoutSec": 10,
+            "statusMessage": "Warn about console logging after edits"
+          }
+        ],
+        "description": "Warn about console logging after edits",
+        "id": "post:edit:console-warn"
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/codex-native-hook-adapter.js --event PostToolUse --id post:session-activity-tracker --run-with-flags scripts/hooks/session-activity-tracker.js --profiles standard,strict",
+            "async": false,
+            "timeoutSec": 10,
+            "statusMessage": "Track tool activity for ECC status"
+          }
+        ],
+        "description": "Track tool activity for ECC status",
+        "id": "post:session-activity-tracker"
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/codex-native-hook-adapter.js --event PostToolUse --id post:ecc-context-monitor --run-with-flags scripts/hooks/ecc-context-monitor.js --profiles standard,strict",
+            "async": false,
+            "timeoutSec": 10,
+            "statusMessage": "Maintain ECC context monitor state"
+          }
+        ],
+        "description": "Maintain ECC context monitor state",
+        "id": "post:ecc-context-monitor"
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/codex-native-hook-adapter.js --event Stop --id stop:format-typecheck --run-with-flags scripts/hooks/stop-format-typecheck.js --profiles standard,strict",
+            "async": false,
+            "timeoutSec": 300,
+            "statusMessage": "Batch format/typecheck at turn end"
+          }
+        ],
+        "description": "Batch format/typecheck at turn end",
+        "id": "stop:format-typecheck"
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/codex-native-hook-adapter.js --event Stop --id stop:check-console-log --run-with-flags scripts/hooks/check-console-log.js --profiles standard,strict",
+            "async": false,
+            "timeoutSec": 30,
+            "statusMessage": "Check for leftover console logging"
+          }
+        ],
+        "description": "Check for leftover console logging",
+        "id": "stop:check-console-log"
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/codex-native-hook-adapter.js --event Stop --id stop:session-end --run-with-flags scripts/hooks/session-end.js --profiles standard,strict",
+            "async": false,
+            "timeoutSec": 30,
+            "statusMessage": "Write ECC session summary"
+          }
+        ],
+        "description": "Write ECC session summary",
+        "id": "stop:session-end"
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/codex-native-hook-adapter.js --event Stop --id stop:evaluate-session --run-with-flags scripts/hooks/evaluate-session.js --profiles standard,strict",
+            "async": false,
+            "timeoutSec": 30,
+            "statusMessage": "Evaluate session outcome"
+          }
+        ],
+        "description": "Evaluate session outcome",
+        "id": "stop:evaluate-session"
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/codex-native-hook-adapter.js --event Stop --id stop:cost-tracker --run-with-flags scripts/hooks/cost-tracker.js --profiles standard,strict",
+            "async": false,
+            "timeoutSec": 30,
+            "statusMessage": "Update ECC cost tracking"
+          }
+        ],
+        "description": "Update ECC cost tracking",
+        "id": "stop:cost-tracker"
+      }
+    ]
+  }
+}

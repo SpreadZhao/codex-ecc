@@ -1,0 +1,21 @@
+.direnv/
+.npm-global/
+.npm-cache/
+node_modules/
+result
+result-*
+*.log
+
+# Local business workspace instances generated from this reusable template.
+.workspaces/
+
+# Generated local ECC runtime and lifecycle state.
+.ecc/source/
+.ecc/state/
+.ecc/home/
+.ecc/codex-home/
+
+# The workspace root tracks configuration only; project repositories live here.
+repos/*
+!repos/.gitkeep
+!repos/README.md

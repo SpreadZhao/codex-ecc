@@ -1,0 +1,44 @@
+{
+  "nodes": {
+    "ecc-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1779968746,
+        "narHash": "sha256-erKhDj+Yal54z0lsKzOZG0aLIVi9fHSbP2KOv8c2uT4=",
+        "owner": "affaan-m",
+        "repo": "ECC",
+        "rev": "64cd1ba248e77e377e76f70fc4e6434bfdddd511",
+        "type": "github"
+      },
+      "original": {
+        "owner": "affaan-m",
+        "repo": "ECC",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1779560665,
+        "narHash": "sha256-tpyBcxPpcQb8ukyNF7DoCwfSY3VPsxHoYwj00Cayv5o=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "64c08a7ca051951c8eae34e3e3cb1e202fe36786",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "ecc-src": "ecc-src",
+        "nixpkgs": "nixpkgs"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
