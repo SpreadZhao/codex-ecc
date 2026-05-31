@@ -40,6 +40,7 @@ seed_from_source_workspace() {
     "flake.nix:0644" \
     ".envrc:0644" \
     ".gitignore:0644" \
+    ".ignore:0644" \
     "ecc-source.lock.json:0644" \
     "AGENTS.md:0644" \
     "README.md:0644" \
@@ -124,6 +125,10 @@ write_if_missing "$ROOT/flake.nix" <<'EOF'
 
             shellHook = ''
               export CODEX_ECC_WORKSPACE="$PWD"
+              workspace_parent="$(dirname "$PWD")"
+              if [ "$(basename "$workspace_parent")" = ".workspaces" ]; then
+                export GIT_CEILING_DIRECTORIES="$workspace_parent''${GIT_CEILING_DIRECTORIES:+:$GIT_CEILING_DIRECTORIES}"
+              fi
               export ECC_SRC="${ecc-src}"
               export NPM_CONFIG_PREFIX="$PWD/.npm-global"
               export NPM_CONFIG_CACHE="$PWD/.npm-cache"
@@ -140,8 +145,16 @@ write_if_missing "$ROOT/flake.nix" <<'EOF'
 EOF
 
 write_if_missing "$ROOT/.envrc" <<'EOF'
+workspace_parent="$(dirname "$PWD")"
+if [ "$(basename "$workspace_parent")" = ".workspaces" ]; then
+  export GIT_CEILING_DIRECTORIES="$workspace_parent${GIT_CEILING_DIRECTORIES:+:$GIT_CEILING_DIRECTORIES}"
+  codex_ecc_flake_ref="path:$PWD"
+else
+  codex_ecc_flake_ref="."
+fi
+
 if [ "$(uname -s)" = "Linux" ] && command -v nix >/dev/null 2>&1 && type use_flake >/dev/null 2>&1; then
-  use flake
+  use flake "$codex_ecc_flake_ref"
 else
   source_env scripts/ecc-env.sh
 fi
@@ -168,6 +181,13 @@ repos/*
 !repos/README.md
 EOF
 
+write_if_missing "$ROOT/.ignore" <<'EOF'
+# Keep child repositories visible to rg/Codex even though parent Git ignores them.
+!repos/
+!repos/*/
+repos/*/.git/**
+EOF
+
 write_if_missing "$ROOT/ecc-source.lock.json" <<'EOF'
 {
   "repo": "https://github.com/affaan-m/ECC.git",
@@ -188,6 +208,7 @@ This is a multi-repository workspace managed by Codex with workspace-local ECC a
 - Each direct child under `repos/` is an independent project unless the user explicitly says otherwise.
 - `repos.yaml` is the authoritative registry for repository paths, roles, build commands, and verification commands.
 - `.codex/` and `.agents/skills/` are workspace-local ECC/Codex assets. Do not sync them into `~/.codex`.
+- `.gitignore` keeps child repositories under `repos/` out of parent workspace Git if this workspace is later initialized as a Git repository; `.ignore` re-exposes `repos/` and direct child repository directories to `rg`/Codex so agents can discover child repository files from the workspace root while still respecting each child repository's own ignore rules.
 
 Also read these files when they exist:
 
@@ -219,7 +240,7 @@ When a task spans multiple repositories:
 - Never push unless explicitly asked.
 - Do not rewrite history unless explicitly asked.
 - Keep branches, worktrees, and remotes isolated per repository.
-- The workspace root may be a Git repository for configuration; nested repositories under `repos/` remain independent.
+- Reusable template roots may be Git repositories for configuration. Local `.workspaces/<name>` business instances are not Git repositories; child repositories under `repos/` remain independent.
 
 ## ECC Boundaries
 
@@ -483,6 +504,13 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+ROOT_PARENT="$(dirname "$ROOT")"
+if [ "$(basename "$ROOT_PARENT")" = ".workspaces" ]; then
+  case ":${GIT_CEILING_DIRECTORIES:-}:" in
+    *":$ROOT_PARENT:"*) ;;
+    *) export GIT_CEILING_DIRECTORIES="$ROOT_PARENT${GIT_CEILING_DIRECTORIES:+:$GIT_CEILING_DIRECTORIES}" ;;
+  esac
+fi
 
 find_real_codex() {
   local shim="$ROOT/scripts/bin/codex"
@@ -575,12 +603,5 @@ else
   echo "skip existing: scripts/sync-workspace-instance.sh"
 fi
 
-if [ ! -d "$ROOT/.git" ]; then
-  git -C "$ROOT" init -b main 2>/dev/null || {
-    git -C "$ROOT" init
-    git -C "$ROOT" branch -m main
-  }
-fi
-
 echo "Workspace scaffold ready at $ROOT"
-echo "Next: cd $ROOT && git add . && direnv allow && scripts/sync-ecc.sh --update-lock --force"
+echo "Next: cd $ROOT && direnv allow && scripts/sync-ecc.sh --update-lock --force"

@@ -196,6 +196,10 @@
 
             shellHook = ''
               export CODEX_ECC_WORKSPACE="$PWD"
+              workspace_parent="$(dirname "$PWD")"
+              if [ "$(basename "$workspace_parent")" = ".workspaces" ]; then
+                export GIT_CEILING_DIRECTORIES="$workspace_parent''${GIT_CEILING_DIRECTORIES:+:$GIT_CEILING_DIRECTORIES}"
+              fi
               export ECC_SRC="${ecc-src}"
               if [ -d "$PWD/.ecc/source" ]; then
                 export CODEX_ECC_RUNTIME="$PWD/.ecc/source"

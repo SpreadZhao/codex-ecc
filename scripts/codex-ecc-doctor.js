@@ -332,6 +332,19 @@ function checkGitIgnore() {
     if (raw.includes(pattern)) ok(`.gitignore ignores ${pattern}`);
     else fail(`.gitignore missing ${pattern}`);
   }
+
+  if (raw.includes('repos/*')) ok('.gitignore keeps child repositories out of parent Git');
+  else fail('.gitignore missing repos/*');
+
+  if (!exists('.ignore')) {
+    fail('.ignore missing');
+    return;
+  }
+  const rgIgnore = read('.ignore');
+  if (rgIgnore.includes('!repos/') && rgIgnore.includes('!repos/*/')) ok('.ignore exposes child repository directories to rg/Codex');
+  else fail('.ignore missing !repos/ and !repos/*/');
+  if (rgIgnore.includes('repos/*/.git/**')) ok('.ignore hides child repository Git internals');
+  else fail('.ignore missing repos/*/.git/**');
 }
 
 function checkPortableLock() {
@@ -407,6 +420,10 @@ function checkPortableHostTools() {
 
 function checkTemplateBoundary() {
   if (!exists('.codex-ecc-template')) {
+    if (exists('.ecc/state/bootstrap/source-template.json')) {
+      if (exists('.git')) fail('local business instance should not be a Git repository');
+      else ok('local business instance is not a Git repository');
+    }
     ok('workspace is an instance, not a reusable template');
     return;
   }

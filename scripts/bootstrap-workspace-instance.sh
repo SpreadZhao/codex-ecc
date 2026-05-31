@@ -9,9 +9,8 @@ Usage: scripts/bootstrap-workspace-instance.sh [--no-sync] [--no-update-lock] <n
 
 Create a local business workspace instance from this reusable Codex ECC
 template. A simple name is created under .workspaces/<name>, which is ignored
-by the template repository. The generated instance is its own Git repository
-and can track repos.yaml, child repository routing, and local workspace state
-without dirtying the template.
+by the template repository. The generated instance is not a Git repository;
+child repositories under repos/ keep their own Git history.
 
 By default this creates the instance, updates the instance ECC source lock,
 and syncs the latest ECC assets into the instance.

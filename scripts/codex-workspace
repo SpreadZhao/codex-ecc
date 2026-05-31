@@ -3,6 +3,13 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+ROOT_PARENT="$(dirname "$ROOT")"
+if [ "$(basename "$ROOT_PARENT")" = ".workspaces" ]; then
+  case ":${GIT_CEILING_DIRECTORIES:-}:" in
+    *":$ROOT_PARENT:"*) ;;
+    *) export GIT_CEILING_DIRECTORIES="$ROOT_PARENT${GIT_CEILING_DIRECTORIES:+:$GIT_CEILING_DIRECTORIES}" ;;
+  esac
+fi
 
 find_real_codex() {
   local shim="$ROOT/scripts/bin/codex"

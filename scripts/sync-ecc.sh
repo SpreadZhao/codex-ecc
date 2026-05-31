@@ -3,6 +3,15 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ORIGINAL_ARGS=("$@")
+ROOT_PARENT="$(dirname "$ROOT")"
+FLAKE_REF="$ROOT"
+if [ "$(basename "$ROOT_PARENT")" = ".workspaces" ]; then
+  case ":${GIT_CEILING_DIRECTORIES:-}:" in
+    *":$ROOT_PARENT:"*) ;;
+    *) export GIT_CEILING_DIRECTORIES="$ROOT_PARENT${GIT_CEILING_DIRECTORIES:+:$GIT_CEILING_DIRECTORIES}" ;;
+  esac
+  FLAKE_REF="path:$ROOT"
+fi
 FORCE=0
 UPDATE_LOCK=0
 PRUNE=0
@@ -91,14 +100,14 @@ resolve_nix_ecc_path() {
 
   if [ "$UPDATE_LOCK" -eq 1 ] && [ "${CODEX_ECC_SYNC_LOCK_UPDATED:-0}" != "1" ]; then
     command -v nix >/dev/null 2>&1 || return 1
-    nix flake update ecc-src
+    nix flake update ecc-src --flake "$FLAKE_REF"
     export CODEX_ECC_SYNC_LOCK_UPDATED=1
     if [ "${CODEX_ECC_SYNC_NIX_DEVELOP:-0}" != "1" ]; then
       exec env \
         CODEX_ECC_SYNC_MODE=nix \
         CODEX_ECC_SYNC_NIX_DEVELOP=1 \
         CODEX_ECC_SYNC_LOCK_UPDATED=1 \
-        nix develop "$ROOT" --command "$0" "${ORIGINAL_ARGS[@]}"
+        nix develop "$FLAKE_REF" --command "$0" "${ORIGINAL_ARGS[@]}"
     fi
   fi
 
@@ -114,7 +123,7 @@ resolve_nix_ecc_path() {
       CODEX_ECC_SYNC_MODE=nix \
       CODEX_ECC_SYNC_NIX_DEVELOP=1 \
       CODEX_ECC_SYNC_LOCK_UPDATED="${CODEX_ECC_SYNC_LOCK_UPDATED:-0}" \
-      nix develop "$ROOT" --command "$0" "${ORIGINAL_ARGS[@]}"
+      nix develop "$FLAKE_REF" --command "$0" "${ORIGINAL_ARGS[@]}"
   fi
 
   return 1

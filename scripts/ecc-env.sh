@@ -9,6 +9,13 @@ else
 fi
 
 export CODEX_ECC_WORKSPACE="$CODEX_ECC_ENV_DIR"
+CODEX_ECC_PARENT_DIR="$(dirname "$CODEX_ECC_WORKSPACE")"
+if [ "$(basename "$CODEX_ECC_PARENT_DIR")" = ".workspaces" ]; then
+  case ":${GIT_CEILING_DIRECTORIES:-}:" in
+    *":$CODEX_ECC_PARENT_DIR:"*) ;;
+    *) export GIT_CEILING_DIRECTORIES="$CODEX_ECC_PARENT_DIR${GIT_CEILING_DIRECTORIES:+:$GIT_CEILING_DIRECTORIES}" ;;
+  esac
+fi
 
 if [ -d "$CODEX_ECC_WORKSPACE/.ecc/source" ]; then
   export CODEX_ECC_RUNTIME="$CODEX_ECC_WORKSPACE/.ecc/source"

@@ -26,14 +26,17 @@ Treat ECC as workspace-local configuration, not as a global Codex installer.
 - **Refresh ECC assets in an existing workspace**: run `scripts/sync-ecc.sh --update-lock --force` from that workspace root. This syncs the full ECC runtime, all upstream skills, and generated Codex prompts. Use `--source-mode git` to force the portable non-Nix resolver.
 - **Refresh one local business instance from the template root**: run `scripts/sync-workspace-instance.sh <name>`. If the target instance is unclear, list `scripts/sync-workspace-instance.sh --list` and ask one short question.
 - **Explain or audit the architecture**: read `references/workspace-blueprint.md`, then inspect the current workspace files.
-- **Add project repositories**: prefer `scripts/import-repo.sh`, which accepts a Git URL or local Git repository path, creates or targets a workspace instance, writes `AGENTS.workspace.md`, and updates the instance `repos.yaml`.
+- **Add project repositories**: prefer `scripts/import-repo.sh`, which accepts a Git URL or local Git repository path, creates or targets a workspace instance, writes `AGENTS.workspace.md`, and updates the instance `repos.yaml`. Before running any repository import/add command, ask the user one short target-selection question and wait for the answer.
 
-When the user asks to "add/import this repository" and does not specify the target instance:
+Repository import gate:
 
-1. If running from a template checkout, list existing instances with `scripts/import-repo.sh --list-instances`.
-2. Ask one short question: choose an existing `.workspaces/<name>` instance or provide a new instance name.
-3. Use `scripts/import-repo.sh --instance <name> <source>` for an existing instance or `scripts/import-repo.sh --new-instance <name> <source>` for a new one.
-4. If running from an instance checkout, import into the current instance unless the user explicitly names another one.
+1. Never import a repository before asking and receiving an explicit target answer in the current conversation.
+2. Do not infer a workspace or instance name from the repository name.
+3. Do not auto-select the current workspace, the only existing instance, or a newly generated name.
+4. If no suitable instance exists, ask for the new workspace/instance name before running `scripts/import-repo.sh --new-instance <name> <source>`.
+5. If one or more instances already exist, list them with `scripts/import-repo.sh --list-instances`, then ask which existing `.workspaces/<name>` instance to use or what new instance name to create.
+6. If the user already named a target instance in the same request, ask a brief confirmation before importing, then use `scripts/import-repo.sh --instance <name> <source>` or `scripts/import-repo.sh --new-instance <name> <source>` based on the answer.
+7. If running from an instance checkout, still ask whether to import into the current instance or another/new instance before running the import.
 
 Read `references/workspace-blueprint.md` when you need exact file responsibilities, safety rules, or the expected directory structure.
 
@@ -73,7 +76,7 @@ Read `references/workspace-blueprint.md` when you need exact file responsibiliti
    node --check scripts/codex-ecc-doctor.js
    bash -n scripts/bootstrap-workspace-instance.sh
    scripts/codex-ecc-doctor.js
-   git status --short
+   if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then git status --short; fi
    ```
 
 ## ECC Refresh Workflow
@@ -82,7 +85,7 @@ From an existing workspace root:
 
 ```bash
 scripts/sync-ecc.sh --update-lock --force
-git diff -- flake.lock AGENTS.ecc.md .codex .agents/skills scripts flake.nix
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then git diff -- flake.lock AGENTS.ecc.md .codex .agents/skills scripts flake.nix; fi
 nix flake check --no-build
 ```
 
@@ -90,7 +93,7 @@ Portable Linux/macOS refresh:
 
 ```bash
 scripts/sync-ecc.sh --source-mode git --update-lock --force
-git diff -- ecc-source.lock.json AGENTS.ecc.md .codex .agents/skills scripts
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then git diff -- ecc-source.lock.json AGENTS.ecc.md .codex .agents/skills scripts; fi
 ```
 
 If strict mirroring is required, pass `--prune` so local `.codex`, `.agents/skills`, and `AGENTS.ecc.md` are replaced from the current ECC source. Use this only when local custom skills do not live under `.agents/skills` or when they are intentionally backed up elsewhere.
@@ -123,7 +126,7 @@ Portable mode requires `bash`, `direnv`, `git`, `node >=18` with `npm`, and a gl
 - `ECC_SRC` resolves inside `direnv exec . printenv ECC_SRC`.
 - Root `AGENTS.md` defines multi-repo boundaries and says not to modify `~/.codex`.
 - Pushable template repos may contain `.codex-ecc-template`; in that mode `scripts/add-repo.sh` must refuse product repositories unless `CODEX_ECC_ALLOW_TEMPLATE_REPOS=1` is explicitly set.
-- `scripts/bootstrap-workspace-instance.sh <name>` creates an ignored independent instance under `.workspaces/<name>` with its own Git repository and refresh scripts.
+- `scripts/bootstrap-workspace-instance.sh <name>` creates an ignored non-Git instance under `.workspaces/<name>` with workspace refresh scripts. Child repositories under `repos/` keep their own Git histories.
 - `scripts/sync-workspace-instance.sh <name>` can be run from the template root to update one existing `.workspaces/<name>` instance to the latest ECC configuration by default.
 - `scripts/import-repo.sh` can import GitHub/Git URLs and local Git repositories into an existing or newly created instance.
 - `AGENTS.ecc.md`, `.codex/AGENTS.md`, `.codex/config.toml`, `.codex/agents/`, `.codex/prompts/`, `.agents/skills/`, and `.ecc/source/` exist after sync.
@@ -135,4 +138,5 @@ Portable mode requires `bash`, `direnv`, `git`, `node >=18` with `npm`, and a gl
 - `codex` launches through `scripts/codex-workspace`, sets `CLAUDE_PLUGIN_ROOT` / `ECC_PLUGIN_ROOT`, exposes native Codex hooks through `.codex/hooks.json`, adapts Codex transcripts, writes continuous-learning observation state under `.ecc/state/`, updates ECC tool activity metrics under `.ecc/home/.claude/metrics/`, and replays the safe post-session ECC hook graph through `scripts/codex-replay-ecc-hooks.js` as a fallback/complement.
 - `scripts/codex-ecc-doctor.js` passes, proving the local Codex/ECC surface is present without reading or writing `~/.codex`.
 - `repos.yaml` exists and child repos live under `repos/`.
-- `.gitignore` ignores `repos/*` while keeping `repos/.gitkeep` and `repos/README.md`.
+- `.gitignore` ignores `repos/*` while keeping `repos/.gitkeep` and `repos/README.md` so the parent workspace does not track child repositories.
+- `.ignore` unignores `repos/` and `repos/*/` so `rg` and Codex can discover child repository files from the workspace root, while still respecting child repository ignore rules and keeping `repos/*/.git/**` hidden from search.

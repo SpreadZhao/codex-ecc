@@ -1,0 +1,4 @@
+# Keep child repositories visible to rg/Codex even though parent Git ignores them.
+!repos/
+!repos/*/
+repos/*/.git/**

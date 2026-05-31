@@ -34,7 +34,7 @@ Things you can ask Codex from the template root:
 - "Tell me where I should start Codex for this project." Codex should explain that template-level operations start here, while application development starts inside `.workspaces/<name>`.
 - "Inspect the workspace architecture." Codex should read `AGENTS.md`, this README, `repos.yaml`, and the `codex-ecc-workspace` skill documents.
 - "Run the ECC workspace health check." Codex should run `scripts/codex-ecc-doctor.js`.
-- "Show me what changed after a refresh." Codex should inspect `git diff` in the template root or in the selected `.workspaces/<name>` instance, depending on the target.
+- "Show me what changed after a refresh." Codex should inspect `git diff` in the template root when the template changed; generated `.workspaces/<name>` instances are local non-Git directories.
 
 Create a local business workspace instance before adding application repositories:
 
@@ -48,9 +48,9 @@ codex
 
 `scripts/bootstrap-workspace-instance.sh` updates the generated instance's
 ECC source lock and syncs latest ECC assets by default. The generated instance is
-an independent Git repository under `.workspaces/`, which is ignored by this
-template. It can track `repos.yaml`, local routing decisions, and child
-repository state without dirtying the reusable template repo.
+a non-Git directory under `.workspaces/`, which is ignored by this template.
+It keeps workspace-local `repos.yaml` and routing decisions as local state,
+while child repositories under `repos/` keep their own Git histories.
 
 From the template root, update one existing instance's ECC configuration:
 
@@ -211,4 +211,4 @@ nix build .#ecc2
 - `repos/` contains independent Git repositories.
 - `repos.yaml` records each repository path, role, and verification commands.
 
-The template root should not contain product repositories. Business instances can track their own `repos.yaml`; each child repository under an instance still keeps its own Git history.
+The template root should not contain product repositories. Business instances keep their own local `repos.yaml`; each child repository under an instance still keeps its own Git history.

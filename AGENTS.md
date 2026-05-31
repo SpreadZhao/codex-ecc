@@ -17,6 +17,7 @@ syncing the latest workspace-local ECC assets.
 - `.ecc/source/` is a generated mirror of the pinned ECC source from `flake.lock` on Nix or `ecc-source.lock.json` without Nix.
 - `.ecc/state/` and `.ecc/home/` are generated local runtime state and should not be treated as product code.
 - `.workspaces/` contains ignored local business workspace instances generated from the reusable template.
+- `.gitignore` keeps child repositories under `repos/` out of the parent workspace Git; `.ignore` re-exposes `repos/` and direct child repository directories to `rg`/Codex so agents can discover child repository files from the workspace root while still respecting each child repository's own ignore rules.
 
 Also read these files when they exist:
 
@@ -57,7 +58,7 @@ When a task spans multiple repositories:
 - Never push unless explicitly asked.
 - Do not rewrite history unless explicitly asked.
 - Keep branches, worktrees, and remotes isolated per repository.
-- The workspace root may be a Git repository for configuration; nested repositories under `repos/` remain independent.
+- The reusable template root may be a Git repository for configuration. Local `.workspaces/<name>` business instances are not Git repositories; nested repositories under `repos/` remain independent.
 
 ## ECC Boundaries
 
